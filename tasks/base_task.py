@@ -14,6 +14,7 @@ from omni.physx.scripts.utils import setStaticCollider
 from omni.kit.material.library import get_material_prim_path
 from omni.isaac.dynamic_control import _dynamic_control
 from omni.physx.scripts import physicsUtils
+from omni.isaac.core.utils.rotations import euler_angles_to_quat,quat_to_euler_angles, matrix_to_euler_angles, quat_to_rot_matrix
 
 import pxr
 from pxr import UsdPhysics, Gf, PhysxSchema, UsdShade
@@ -150,7 +151,7 @@ class BaseTask(ABC):
         raise NotImplementedError
 
     def _define_stage_properties(self):
-        set_stage_up_axis(self.stage_properties.scene_up_axis)
+        set_stage_up_axis("Z")
         set_stage_units(self.stage_properties.scene_stage_unit)
         self._set_up_physics_secne()
         
@@ -344,7 +345,7 @@ class BaseTask(ABC):
 
     def _set_ground_plane(self,index):
         ground_plane_path = f"/World_{index}/house/groundPlane"
-        physicsUtils.add_ground_plane(self.stage,  ground_plane_path, "Z", 5000.0, 
+        physicsUtils.add_ground_plane(self.stage,  ground_plane_path, "Y", 5000.0, 
             pxr.Gf.Vec3f(0.0, 0.0, 0.0), pxr.Gf.Vec3f(0.2))
         ground_prim = self.stage.GetPrimAtPath(ground_plane_path)
         #if self.is_loading_scene:

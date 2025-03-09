@@ -174,6 +174,9 @@ def main(cfg):
                 obs = env.reset(robot_parameters, scene_parameters, object_parameters, 
                                 robot_base=robot_base, gt_actions=gt_actions)
 
+                # while True:
+                    
+                #     simulation_context.render()
                 logger.info(f'Instruction: {gt_frames[0]["instruction"]}')
                 logger.info('Ground truth action:')
                 for gt_action, grip_open in zip(gt_actions, cfg.gripper_open[task]):
