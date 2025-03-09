@@ -16,10 +16,7 @@ class DataRecorder():
         self.replay_start = False
         self.target_paths = target_paths
         self.robot_path = robot_path
-        self.target_objs = []
-
-        for t_path in self.target_paths:
-            self.target_objs.append(XFormPrim(t_path))
+        self.target_objs = [XFormPrim(t_path) for t_path in self.target_paths]
 
         self.traj_dir = None
         self._frankabot = frankabot
@@ -27,6 +24,11 @@ class DataRecorder():
         self.task_type = task_type
         self.checker = None
         self.ptcl_frame_skip = 20
+        
+        # New attribute to store the last non-None joint action values.
+        self.last_joint_positions = None
+
+        # Old-style buffer for CSV data
         self.buffer = {"robot": [], "object": [], "particles": [], "diffs": []}
 
     def get_replay_status(self):
@@ -38,57 +40,188 @@ class DataRecorder():
         self.traj_dir = traj_dir
         self.checker = checker
 
+        # Reset old-style buffers
         self.buffer = {"robot": [], "object": [], "particle": []}
 
     def stop_record(self):
         self.record = False
 
     def save_buffer(self, success, abs_info=None):
+        """
+        1) Write old CSV/gzip files (as before),
+        2) Write success/fail status to success.txt,
+        3) If success == True, parse buffer and write new JSON in the desired format.
+        """
         print("write:", self.traj_dir)
         if not os.path.exists(self.traj_dir):
             os.makedirs(self.traj_dir)
 
-        # Save CSV files with gzip compression
-        def save_csv_gzip(file_name, data):
-            with gzip.open(os.path.join(self.traj_dir, f'{file_name}.csv.gz'), 'wt') as file:
-                for line in data:
-                    file.write(line)
-
-        save_csv_gzip('record_robot', self.buffer['robot'])
-        save_csv_gzip('record_object', self.buffer['object'])
-        save_csv_gzip('record_particle', self.buffer['particle'])
-
-        with open(os.path.join(self.traj_dir, 'success.txt'), 'w') as file:
-            if success:
-                file.write(f'success\n{self.checker.get_diff()}')
-            else:
-                file.write('fail')
-
-        if abs_info is not None:
-            class NpEncoder(json.JSONEncoder):
-                def default(self, obj):
-                    if isinstance(obj, np.integer):
-                        return int(obj)
-                    elif isinstance(obj, np.floating):
-                        return float(obj)
-                    elif isinstance(obj, np.ndarray):
-                        return obj.tolist()
-                    else:
-                        return super().default(obj)
-
-            config_path = os.path.join(self.traj_dir, 'object_info.json')
-            with open(config_path, "w") as f:
-                # Minimize JSON file size by removing indentation
-                json.dump(abs_info, f, cls=NpEncoder)
-
+        # ----------------------------------------
+        # NEW CODE: Build the JSON only if success
+        # ----------------------------------------
+        if success:
+            trajectory_json = self._build_trajectory_json()
+            # Write to 'trajectory.json' in the same folder
+            out_path = os.path.join(self.traj_dir, "trajectory.json")
+            with open(out_path, "w") as f:
+                json.dump(trajectory_json, f, indent=2)
+            print(f"[INFO] Wrote new JSON format to: {out_path}")
+        
+         # Reset old buffers
         self.buffer = {"robot": [], "object": [], "particle": []}
+
+    def _build_trajectory_json(self):
+        """
+        Parse the data in self.buffer['robot'], self.buffer['object'] (already saved),
+        and build a single-trajectory JSON in the format:
+        {
+          "franka": [
+            {
+              "actions": [...],
+              "init_state": {...},
+              "states": [...],
+              "extra": None
+            }
+          ]
+        }
+        """
+        num_steps = len(self.buffer["robot"])
+        if num_steps == 0:
+            return {"franka": []}
+
+        traj_dict = {
+            "franka": [
+                {
+                    "actions": [],
+                    "init_state": {},
+                    "states": [],
+                    "extra": None
+                }
+            ]
+        }
+        ep = traj_dict["franka"][0]
+
+        for i in range(num_steps):
+            robot_line = self.buffer["robot"][i].strip()
+            robot_data = eval(robot_line)
+            action_dict_raw = eval(robot_data["actions"]) if robot_data.get("actions", None) else None
+
+            object_line = self.buffer["object"][i].strip()
+            object_data_list = eval(object_line)
+
+            state_i = self._build_state_from_robot_and_objects(robot_data, object_data_list)
+            action_i = self._build_action_from_raw(action_dict_raw)
+
+            ep["states"].append(state_i)
+            ep["actions"].append(action_i)
+
+        ep["init_state"] = ep["states"][0]
+        ep["extra"] = None
+        return traj_dict
+
+    def _build_state_from_robot_and_objects(self, robot_data, object_data_list):
+        """
+        Build a state dict with the robot and objects.
+        """
+        state_dict = {}
+
+        # ------------------
+        # Robot part ("franka")
+        # ------------------
+        joint_positions = robot_data.get("joint_pos", [])
+        dof_pos_robot = {}
+        for j, val in enumerate(joint_positions):
+            # For indices 0-6, use panda_joint1...panda_joint7.
+            if j == 7:
+                key = "panda_finger_joint1"
+            elif j == 8:
+                key = "panda_finger_joint2"
+            else:
+                key = f"panda_joint{j+1}"
+            dof_pos_robot[key] = float(val)
+            if j in [7, 8]:
+                dof_pos_robot[key] = float(val)/100.0
+
+        state_dict["franka"] = {
+            "pos": (self._frankabot.get_world_pose()[0]/100.0).tolist(),
+            "rot": self._frankabot.get_world_pose()[1].tolist(),
+            "dof_pos": dof_pos_robot
+        }
+
+        # ------------------
+        # Objects
+        # ------------------
+        for obj_data in object_data_list:
+            obj_path = obj_data["path"]
+            obj_name = os.path.basename(obj_path)
+            pos = obj_data["pos"]
+            rot = obj_data["rot"]
+            dof_pos_obj = {}
+            if obj_data["joint"] is not None:
+                dof_pos_obj[self.checker.target_joint] = float(obj_data["joint"])
+                if self.task_type in ['open_drawer', 'close_drawer']:
+                    dof_pos_obj[self.checker.target_joint] = float(obj_data["joint"])/100.0
+            
+            t_obj = self.target_objs[0]
+            obj_trans, obj_rot = t_obj.get_world_pose()
+            obj_trans = obj_trans/100.0
+            obj_state = {
+                "pos": [p/100.0 for p in pos] if pos else obj_trans.tolist(),
+                "rot": rot if rot else obj_rot.tolist()
+            }
+            if dof_pos_obj:
+                obj_state["dof_pos"] = dof_pos_obj
+
+            state_dict[obj_name] = obj_state
+
+        return state_dict
+
+    def _build_action_from_raw(self, action_dict_raw):
+        """
+        Build an action dict from raw data.
+        If a joint action value is missing, use the last non-None value.
+        """
+        if not action_dict_raw or "joint_positions" not in action_dict_raw:
+            return {}
+
+        joint_list = action_dict_raw["joint_positions"]
+        dof_target_dict = {}
+      
+        for i, val in enumerate(joint_list):
+            if val is None and self.last_joint_positions is not None:
+                if i < len(self.last_joint_positions):
+                    val = self.last_joint_positions[i]
+            if val is None:
+                continue
+
+            if i == 7:
+                key = "panda_finger_joint1"
+            elif i == 8:
+                key = "panda_finger_joint2"
+            else:
+                key = f"panda_joint{i+1}"
+            
+            try:
+                dof_target_dict[key] = float(val)
+            except:
+                dof_target_dict[key] = val
+            
+            if i in [7, 8]:
+                dof_target_dict[key] = float(val)/100.0
+
+        if all(v is not None for v in joint_list):
+            self.last_joint_positions = joint_list
+
+        return {
+            "dof_pos_target": dof_target_dict,
+            "ee_pose_target": None
+        }
 
     def delete_traj_folder(self):
         import shutil
         from pathlib import Path
         path = Path(self.traj_dir)
         path = path.parent.absolute()
-
         try:
             shutil.rmtree(path)
             print("replay failed, delete this traj: ", str(path))
@@ -100,7 +233,6 @@ class DataRecorder():
         self.robot_data = {
             'joint_pos': robot_states['pos'].tolist(),
             'joint_vel': robot_states['vel'].tolist(),
-            # 'joint_effort': robot_states['effort'].tolist(),
             'actions': str(actions),
         }
         self.ptcl_data = {}
@@ -110,11 +242,11 @@ class DataRecorder():
         elif self.task_type in ["open_drawer","open_cabinet", "close_drawer", "close_cabinet"]:
             self.record_obj_joint()
         elif self.task_type in ["pour_water", "transfer_water"]:
-            # record both pose of the glass and particle positions
             self.record_obj_pose()
             self.record_ptcl(time_step)
         else:
             raise RuntimeError("data recording for %s not implemented" % self.task_type)
+
         if self.record:
             self.buffer['robot'].append(str(self.robot_data).replace("\n", ' ') + '\n')
             self.buffer['object'].append(str(self.obj_data).replace("\n", ' ') + '\n')
@@ -128,27 +260,21 @@ class DataRecorder():
 
     def record_obj_joint(self):
         assert(self.checker is not None)
-        # record target joint angles for the specific joint object
         for idx, t_path in enumerate(self.target_paths):
             if t_path == self.checker.target_prim_path:
                 self.obj_data[idx]["joint"] = self.checker.joint_checker.compute_percentage()
 
     def record_ptcl(self, time_step):
         assert(self.checker is not None)
-        # print("time step:", time_step, self.ptcl_frame_skip)
-        # print("get all particle:", self.checker.liquid_checker.get_all_particles())
         if time_step % self.ptcl_frame_skip == 0:
             self.ptcl_data = self.checker.liquid_checker.get_all_particles()
 
     def start_replay(self, traj_dir, checker):
         self.traj_dir = traj_dir
         self.checker = checker
-
-        # Check for legacy record file
         if os.path.exists(os.path.join(self.traj_dir, 'record.csv')):
             with open(os.path.join(self.traj_dir, 'record.csv'), 'r') as file1:
                 Lines = file1.readlines()
-
             try:
                 self.replayBuffer = [eval(line) for line in Lines]
             except:
@@ -160,7 +286,6 @@ class DataRecorder():
             self.replayBufferObj = []
             self.replayBufferPtcl = []
 
-            # Function to read gzip compressed CSV files
             def read_gzip_csv(file_name):
                 try:
                     with gzip.open(os.path.join(self.traj_dir, f'{file_name}.csv.gz'), 'rt') as file:
@@ -168,36 +293,36 @@ class DataRecorder():
                 except FileNotFoundError:
                     return []
             
-
-            # Load the data from the new gzip compressed files
             self.replayBuffer = read_gzip_csv('record_robot')
             self.replayBufferObj = read_gzip_csv('record_object')
             self.replayBufferPtcl = read_gzip_csv('record_particle')
-
             assert(len(self.replayBuffer) == len(self.replayBufferObj))
-
         self.replay_start = True
 
     def replay_data(self):
         taskDone = False
-        # print("len(self.replayBuffer) ", len(self.replayBuffer) )
-        # print("len(self.replayBufferObj)", len(self.replayBufferObj))
         if self.legacy == True:
             robot_data = self.replayBuffer.pop(0)
             action = robot_data
             if action is not None:
-                actions = ArticulationAction(joint_positions=action["joint_positions"])
-                # print("actions: ", actions)
-                _articulation_controller = self._frankabot.get_articulation_controller()
-                _articulation_controller.apply_action(actions)
+                if "joint_positions" in action and action["joint_positions"] is not None:
+                    self.last_joint_positions = action["joint_positions"]
+                    actions = ArticulationAction(joint_positions=action["joint_positions"])
+                elif self.last_joint_positions is not None:
+                    actions = ArticulationAction(joint_positions=self.last_joint_positions)
+                else:
+                    actions = None
+                if actions is not None:
+                    _articulation_controller = self._frankabot.get_articulation_controller()
+                    _articulation_controller.apply_action(actions)
             if len(self.replayBuffer) == 0:
-                # print("Task Done")
                 taskDone = True
         else:
             if len(self.replayBuffer) > 0 and len(self.replayBufferObj) > 0:
                 robot_data = self.replayBuffer.pop(0)
                 obj_data = self.replayBufferObj.pop(0)
                 
+                ptcl_data = {}
                 if self.replayBufferPtcl is not None and len(self.replayBufferPtcl) > 0:
                     ptcl_data = self.replayBufferPtcl.pop(0)
                 
@@ -207,12 +332,16 @@ class DataRecorder():
                 if "joint_pos" in robot_data and robot_data["joint_pos"] is not None:
                     self._frankabot.set_joint_positions(robot_data["joint_pos"])
                     self._frankabot.set_joint_velocities(robot_data["joint_vel"])
-                    # self._frankabot.set_joint_efforts(robot_data["joint_effort"])
 
                 if 'actions' in robot_data:
                     action = eval(robot_data["actions"])
-                    if action is not None:
-                        actions = ArticulationAction(joint_positions=action["joint_positions"])
+                    if action is None or action.get("joint_positions") is None:
+                        joint_positions = self.last_joint_positions
+                    else:
+                        joint_positions = action["joint_positions"]
+                        self.last_joint_positions = joint_positions
+                    if joint_positions is not None:
+                        actions = ArticulationAction(joint_positions=joint_positions)
                         _articulation_controller = self._frankabot.get_articulation_controller()
                         _articulation_controller.apply_action(actions)
                 
@@ -227,7 +356,6 @@ class DataRecorder():
                     raise RuntimeError("data replay for %s not implemented" % self.task_type)
                     
             if len(self.replayBuffer) == 0 or len(self.replayBufferObj) == 0:
-                # print("Task Done")
                 taskDone = True
 
         return taskDone
@@ -235,14 +363,16 @@ class DataRecorder():
     def replay_obj_pose(self, all_obj_data):
         for idx, obj_data in enumerate(all_obj_data):
             if "pos" in obj_data and "rot" in obj_data and \
-                obj_data["pos"] is not None and obj_data["rot"] is not None:
-                self.target_objs[idx].set_local_pose(translation=np.array(obj_data["pos"]), 
-                    orientation=np.array(obj_data["rot"]))
+               obj_data["pos"] is not None and obj_data["rot"] is not None:
+                self.target_objs[idx].set_local_pose(
+                    translation=np.array(obj_data["pos"]), 
+                    orientation=np.array(obj_data["rot"])
+                )
 
     def replay_obj_joint(self, all_obj_data):
         for idx, obj_data in enumerate(all_obj_data):
             if self.target_paths[idx] == self.checker.target_prim_path and \
-                "joint" in obj_data and obj_data["joint"] is not None:
+               "joint" in obj_data and obj_data["joint"] is not None:
                 self.checker.joint_checker.set_joint(np.array(obj_data["joint"]))
 
     def replay_ptcl(self, ptcl_data):

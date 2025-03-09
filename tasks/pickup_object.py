@@ -74,6 +74,8 @@ class PickupObject(BaseTask):
 
         position = param.object_position
         rotation = param.orientation_quat
+
+        position, rotation = self._y_up_to_z_up(position, rotation)
         
         # use this to set relative position, orientation and scale
         xform_prim = XFormPrim(object_prim_path, translation= position, orientation = rotation, scale = np.array(param.scale))

@@ -98,7 +98,7 @@ def main(cfg):
     else:
         task_list = [
             'pickup_object', 'reorient_object', 'open_drawer', 'close_drawer',
-            'open_cabinet', 'close_cabinet', 'pour_water', 'transfer_water'
+            'open_cabinet', 'close_cabinet'
         ]
 
     if use_gt[0]:

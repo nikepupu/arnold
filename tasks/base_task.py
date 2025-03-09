@@ -166,6 +166,8 @@ class BaseTask(ABC):
         
         gravityDirection = self.stage_properties.gravity_direction
         self._gravityDirection = Gf.Vec3f(gravityDirection[0], gravityDirection[1],  gravityDirection[2])
+        # change gravity direction from y up to z up
+        self._gravityDirection = Gf.Vec3f(0.0, 0.0,  -1.0)
 
         scene.CreateGravityDirectionAttr().Set(self._gravityDirection)
 
@@ -220,6 +222,25 @@ class BaseTask(ABC):
             delete_prim(house_prim_path)
         
         # delete_prim('/physicsScene')
+    def _y_up_to_z_up(self, position, rotation, change_unit=False):
+    
+        rotation = np.array(rotation.copy())
+        position = np.array(position.copy())
+        position[[1,2]] = position[[2,1]]
+        position[1] = -position[1]
+        
+        if len(rotation) == 4:
+            import quaternion 
+            q_rotation = quaternion.from_rotation_vector([np.pi / 2, 0, 0])
+            q_original = np.quaternion(rotation[0], rotation[1], rotation[2], rotation[3])
+            q_new = q_rotation * q_original
+            rotation = np.array([q_new.w, q_new.x, q_new.y, q_new.z])
+            if change_unit:
+                position[0] /= 100.0
+                position[1] /= 100.0
+                position[2] /= 100.0
+
+            return position, rotation 
     
     def _load_scene(self):
         index = 0
@@ -234,8 +255,8 @@ class BaseTask(ABC):
           
         house_prim = XFormPrim(house_prim_path)
         # print(euler_angles_to_quat(np.array([np.pi/2, 0, 0])) )
-        house_prim.set_local_pose(np.array([0,0,0]) )
-        # house_prim.set_local_pose(np.array([0,0,0]),  euler_angles_to_quat(np.array([np.pi/2, 0, 0])) )
+        # house_prim.set_local_pose(np.array([0,0,0]) )
+        house_prim.set_local_pose(np.array([0,0,0]),  euler_angles_to_quat(np.array([np.pi/2, 0, 0])) )
 
         furniture_prim = self.stage.GetPrimAtPath(f"{house_prim_path}/{self.scene_parameters[index].furniture_path}")
         #TODO 
@@ -323,7 +344,7 @@ class BaseTask(ABC):
 
     def _set_ground_plane(self,index):
         ground_plane_path = f"/World_{index}/house/groundPlane"
-        physicsUtils.add_ground_plane(self.stage,  ground_plane_path, "Y", 5000.0, 
+        physicsUtils.add_ground_plane(self.stage,  ground_plane_path, "Z", 5000.0, 
             pxr.Gf.Vec3f(0.0, 0.0, 0.0), pxr.Gf.Vec3f(0.2))
         ground_prim = self.stage.GetPrimAtPath(ground_plane_path)
         #if self.is_loading_scene:
@@ -336,8 +357,8 @@ class BaseTask(ABC):
 
         position = self.robot_parameters[index].robot_position
         rotation = self.robot_parameters[index].robot_orientation_quat
-        
-        # position, rotation = self._y_up_to_z_up(position=position, rotation=rotation)
+
+        position, rotation = self._y_up_to_z_up(position=position, rotation=rotation)
 
         robot = Franka(
                 prim_path = prim_path, name = f"my_frankabot{index}",
