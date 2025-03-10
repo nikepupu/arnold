@@ -13,7 +13,7 @@ class PickupChecker(BaseChecker):
         super().__init__()
 
         self.target_prim_path =  target_prim_path
-        self.target_delta_y = self.checker_parameters.target_state
+        self.target_delta_z = self.checker_parameters.target_state
         self.targetRigid = XFormPrim(self.target_prim_path)
         self.previous_pos = None
         self.vel = None
@@ -27,21 +27,21 @@ class PickupChecker(BaseChecker):
     def initialization_step(self):
         # get transform
         mat = omni.usd.utils.get_world_transform_matrix(self.target_prim) 
-        self.target_prim_init_y = mat.ExtractTranslation()[1] # extract y axis
+        self.target_prim_init_z = mat.ExtractTranslation()[2] # extract y axis
         self.is_init = True
         self.create_task_callback()
         
     def get_height(self):
         mat = omni.usd.utils.get_world_transform_matrix(self.target_prim) 
-        target_prim_current_y = mat.ExtractTranslation()[1]
-        return target_prim_current_y
+        target_prim_current_z = mat.ExtractTranslation()[2]
+        return target_prim_current_z
 
     def get_diff(self):
         mat = omni.usd.utils.get_world_transform_matrix(self.target_prim) 
-        target_prim_current_y = mat.ExtractTranslation()[1]
-        need_delta_y = target_prim_current_y - (self.target_delta_y + self.target_prim_init_y)
+        target_prim_current_z = mat.ExtractTranslation()[2]
+        need_delta_z = target_prim_current_z - (self.target_delta_z + self.target_prim_init_z)
 
-        return need_delta_y
+        return need_delta_z
     
     def start_checking(self):
         if not self.is_init:
@@ -50,21 +50,21 @@ class PickupChecker(BaseChecker):
         self.total_step += 1
         if self.total_step % self.check_freq == 0:
             mat = omni.usd.utils.get_world_transform_matrix(self.target_prim) 
-            target_prim_current_y = mat.ExtractTranslation()[1]
+            target_prim_current_z = mat.ExtractTranslation()[2]
             
             pos, rot = self.targetRigid.get_world_pose()
-            pos = pos[1]
+            pos = pos[2]
             
             if self.previous_pos is not None:
                 self.vel  = abs(pos - self.previous_pos)
             
-            target_height = (self.target_delta_y + self.target_prim_init_y)
-            need_delta_y = abs(target_prim_current_y - target_height)
+            target_height = (self.target_delta_z + self.target_prim_init_z)
+            need_delta_z = abs(target_prim_current_z - target_height)
             if self.total_step % self.print_every == 0:
-                print("target height %s current height %s" %(target_height, target_prim_current_y))
+                print("target height %s current height %s" %(target_height, target_prim_current_z))
 
             # success condition
-            if  need_delta_y < self.tolerance and self.vel is not None and self.vel < 0.1 :
+            if  need_delta_z < self.tolerance and self.vel is not None and self.vel < 0.1 :
                 self.success_steps += self.check_freq
                 self._on_success_hold()
             else:
