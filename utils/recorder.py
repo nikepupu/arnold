@@ -6,7 +6,7 @@ from omni.isaac.core.prims import XFormPrim
 from omni.isaac.core.utils.types import ArticulationAction
 import gzip
 import json
-
+from omni.isaac.core.utils.rotations import euler_angles_to_quat,quat_to_euler_angles, matrix_to_euler_angles, quat_to_rot_matrix
 
 class DataRecorder():
     def __init__(self, robot_path, target_paths, frankabot, task_type):
@@ -34,11 +34,13 @@ class DataRecorder():
     def get_replay_status(self):
         return self.replay_start
 
-    def start_record(self, traj_dir, checker):
+    def start_record(self, traj_dir, checker, language_instruction, raw_trajectory_path):
         self.replay_start = False
         self.record = True
         self.traj_dir = traj_dir
         self.checker = checker
+        self.language_instruction = language_instruction
+        self.raw_trajectory_path = raw_trajectory_path
 
         # Reset old-style buffers
         self.buffer = {"robot": [], "object": [], "particle": []}
@@ -53,8 +55,7 @@ class DataRecorder():
         3) If success == True, parse buffer and write new JSON in the desired format.
         """
         print("write:", self.traj_dir)
-        if not os.path.exists(self.traj_dir):
-            os.makedirs(self.traj_dir)
+        
 
         # ----------------------------------------
         # NEW CODE: Build the JSON only if success
@@ -62,7 +63,13 @@ class DataRecorder():
         if success:
             trajectory_json = self._build_trajectory_json()
             # Write to 'trajectory.json' in the same folder
-            out_path = os.path.join(self.traj_dir, "trajectory.json")
+            traj_file = self.traj_dir.replace('.npz', "_v2.json")
+            out_path = os.path.join(traj_file)
+
+            dir_path  = os.path.dirname(out_path)
+            if not os.path.exists(dir_path):
+                os.makedirs(dir_path)
+
             with open(out_path, "w") as f:
                 json.dump(trajectory_json, f, indent=2)
             print(f"[INFO] Wrote new JSON format to: {out_path}")
@@ -116,7 +123,10 @@ class DataRecorder():
             ep["actions"].append(action_i)
 
         ep["init_state"] = ep["states"][0]
-        ep["extra"] = None
+        ep["init_state"]['Scene'] = {"pos": [0, 0, 0], "rot": euler_angles_to_quat(np.array([np.pi/2, 0, 0])).tolist() }
+        ep["extra"] = {}
+        ep['extra']['language_instruction'] = self.language_instruction
+        ep['extra']['raw_trajectory_path'] = self.raw_trajectory_path
         return traj_dict
 
     def _build_state_from_robot_and_objects(self, robot_data, object_data_list):
