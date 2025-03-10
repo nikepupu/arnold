@@ -34,13 +34,14 @@ class DataRecorder():
     def get_replay_status(self):
         return self.replay_start
 
-    def start_record(self, traj_dir, checker, language_instruction, raw_trajectory_path):
+    def start_record(self, traj_dir, checker, language_instruction, raw_trajectory_path, object_id):
         self.replay_start = False
         self.record = True
         self.traj_dir = traj_dir
         self.checker = checker
         self.language_instruction = language_instruction
         self.raw_trajectory_path = raw_trajectory_path
+        self.object_id = object_id
 
         # Reset old-style buffers
         self.buffer = {"robot": [], "object": [], "particle": []}
@@ -62,14 +63,20 @@ class DataRecorder():
         # ----------------------------------------
         if success:
             trajectory_json = self._build_trajectory_json()
-            # Write to 'trajectory.json' in the same folder
-            traj_file = self.traj_dir.replace('.npz', "_v2.json")
-            out_path = os.path.join(traj_file)
-
-            dir_path  = os.path.dirname(out_path)
-            if not os.path.exists(dir_path):
-                os.makedirs(dir_path)
-
+            
+            # Get the base name without the .npz extension (e.g., "xxx")
+            base_name = os.path.basename(self.traj_dir).replace('.npz', '')
+            
+            # Build a new directory path that includes the object_id as a subfolder
+            new_dir = os.path.join(os.path.dirname(self.traj_dir), self.object_id)
+            
+            # Build the full output path with the new directory and file name
+            out_path = os.path.join(new_dir, f"{base_name}_v2.json")
+            
+            # Ensure the new directory exists
+            if not os.path.exists(new_dir):
+                os.makedirs(new_dir)
+            
             with open(out_path, "w") as f:
                 json.dump(trajectory_json, f, indent=2)
             print(f"[INFO] Wrote new JSON format to: {out_path}")

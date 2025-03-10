@@ -11,6 +11,7 @@ import omni
 from omni.isaac.core.prims import XFormPrim
 from environment.physics_utils import set_physics_properties
 import logging
+import os
 
 
 class PickupObject(BaseTask):
@@ -68,6 +69,8 @@ class PickupObject(BaseTask):
             is_unique_fn = lambda x: not is_prim_path_valid(x)
         )
 
+        self.usd_path = param.usd_path
+        self.object_id = self.usd_path.split(os.sep)[-2]
         object_prim = add_reference_to_stage(param.usd_path, object_prim_path)
     
         self._wait_for_loading()
