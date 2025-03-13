@@ -34,7 +34,7 @@ class DataRecorder():
     def get_replay_status(self):
         return self.replay_start
 
-    def start_record(self, traj_dir, checker, language_instruction, raw_trajectory_path, object_id):
+    def start_record(self, traj_dir, checker, language_instruction, raw_trajectory_path, object_id, goal_target, object_scale):
         self.replay_start = False
         self.record = True
         self.traj_dir = traj_dir
@@ -42,6 +42,8 @@ class DataRecorder():
         self.language_instruction = language_instruction
         self.raw_trajectory_path = raw_trajectory_path
         self.object_id = object_id
+        self.goal_target = goal_target
+        self.object_scale = object_scale
 
         # Reset old-style buffers
         self.buffer = {"robot": [], "object": [], "particle": []}
@@ -71,7 +73,7 @@ class DataRecorder():
             new_dir = os.path.join(os.path.dirname(self.traj_dir), self.object_id)
             
             # Build the full output path with the new directory and file name
-            out_path = os.path.join(new_dir, f"{base_name}_v2.json")
+            out_path = os.path.join(new_dir, f"{base_name}_{self.object_scale}_{self.goal_target}_v2.json")
             
             # Ensure the new directory exists
             if not os.path.exists(new_dir):
@@ -134,6 +136,7 @@ class DataRecorder():
         ep["extra"] = {}
         ep['extra']['language_instruction'] = self.language_instruction
         ep['extra']['raw_trajectory_path'] = self.raw_trajectory_path
+        ep['extra']['goal_target'] = self.goal_target
         return traj_dict
 
     def _build_state_from_robot_and_objects(self, robot_data, object_data_list):

@@ -14,7 +14,7 @@ class OrientChecker(BaseChecker):
         super().__init__()
        
         self.target_prim_path =  target_prim_path
-        self.target_delta_y = self.checker_parameters.target_state
+        self.target_delta_z = self.checker_parameters.target_state
 
         self.targetRigid = XFormPrim(self.target_prim_path)
         self.previous_pos = None
@@ -26,20 +26,24 @@ class OrientChecker(BaseChecker):
         
         self.check_freq = 1
     
-    def get_prim_y_angle(self):
+    def get_prim_z_angle(self):
         """
         Get prim at angle difference from [0,1,0]
         """
         
         mat = omni.usd.utils.get_world_transform_matrix(self.target_prim) 
 
-        y = mat.GetColumn(1)
-        # print("mat", mat, "\n column", y)
-        cos_angle = y[1] / math.sqrt(y[0]**2 + y[1]**2 + y[2]**2)
+        # Get the Z axis column from the transformation matrix (typically column 2)
+        z = mat.GetColumn(2)
+        
+        # Calculate the cosine of the angle between the local Z axis and [0, 0, 1]
+        cos_angle = z[1] / math.sqrt(z[0]**2 + z[1]**2 + z[2]**2)
+        
         return math.degrees(math.acos(cos_angle))
 
+
     def get_diff(self):
-        delta_angle = self.get_prim_y_angle() - self.target_delta_y
+        delta_angle = self.get_prim_z_angle() - self.target_delta_z
 
         return delta_angle
 
@@ -49,7 +53,7 @@ class OrientChecker(BaseChecker):
         # success condition
         self.total_step += 1
         if self.total_step % self.check_freq == 0:
-            delta_angle = abs(self.get_prim_y_angle() - self.target_delta_y)
+            delta_angle = abs(self.get_prim_z_angle() - self.target_delta_z)
 
             pos, rot = self.targetRigid.get_world_pose()
             pos = pos[1]

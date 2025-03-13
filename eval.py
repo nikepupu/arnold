@@ -17,7 +17,7 @@ from pathlib import Path
 from scipy.spatial.transform import Rotation as R
 
 from environment.runner_utils import get_simulation
-simulation_app, simulation_context, _ = get_simulation(headless=True, gpu_id=0)
+simulation_app, simulation_context, _ = get_simulation(headless=False, gpu_id=0)
 
 from dataset import InstructionEmbedding
 from tasks import load_task
@@ -31,11 +31,11 @@ def load_data(data_path):
     demo_path = sorted([str(item) for item in demos if not item.is_dir()])
     data = []
     fnames = []
-
+    
     for npz_path in demo_path:
         data.append(np.load(npz_path, allow_pickle=True))
         fnames.append(npz_path)
-    return data, fnames
+    return data, fnames, demo_path
 
 
 def load_agent(cfg, device):
@@ -141,7 +141,7 @@ def main(cfg):
             
             if os.path.exists(os.path.join(cfg.data_root, task, eval_split)):
                 logger.info(f'Evaluating {task} {eval_split}')
-                data, fnames = load_data(data_path=os.path.join(cfg.data_root, task, eval_split))
+                data, fnames, demo_paths = load_data(data_path=os.path.join(cfg.data_root, task, eval_split))
             else:
                 logger.info(f'{eval_split} not exist')
                 continue
@@ -152,6 +152,9 @@ def main(cfg):
             while len(data) > 0:
                 anno = data.pop(0)
                 fname = fnames.pop(0)
+                demo_path = demo_paths.pop(0)
+                demo_path = demo_path.split(os.sep)[-1]
+                
                 gt_frames = anno['gt']
                 robot_base = gt_frames[0]['robot_base']
 
@@ -174,9 +177,6 @@ def main(cfg):
                 obs = env.reset(robot_parameters, scene_parameters, object_parameters, 
                                 robot_base=robot_base, gt_actions=gt_actions)
 
-                # while True:
-                    
-                #     simulation_context.render()
                 logger.info(f'Instruction: {gt_frames[0]["instruction"]}')
                 logger.info('Ground truth action:')
                 for gt_action, grip_open in zip(gt_actions, cfg.gripper_open[task]):
@@ -190,6 +190,11 @@ def main(cfg):
                     env.recorder.start_record(
                         traj_dir=os.path.join(cfg.exp_dir, f'traj_{eval_setting}', os.path.split(fname)[-1]),
                         checker=env.checker,
+                        language_instruction = gt_frames[0]["instruction"],
+                        raw_trajectory_path = demo_path,
+                        object_id = env.object_id,
+                        goal_target = anno["info"].item()['objects_parameters'][0]['object_timeline_management']['target_state'],
+                        object_scale = env.object_scale
                     )
 
                 try:

@@ -29,15 +29,15 @@ save_interval: 10000
 resume: null   # checkpoint file to resume training
 use_gt: [False, False]
 visualize: False
-eval_splits: [train, test, novel_object, novel_scene, novel_state, any_state]
-record: True
+eval_splits: [train, test, novel_object, novel_scene, novel_state]
+record: False
 
 
 # ------------------environment------------------
 cameras: [front, base, left, wrist_bottom, wrist]
 img_size: 128
 offset_bound: [-0.63, 0, -0.63, 0.63, 1.26, 0.63]
-iso_surface: False
+iso_surface: True
 
 
 # ------------------cliport6d------------------

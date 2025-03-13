@@ -71,6 +71,7 @@ class PickupObject(BaseTask):
 
         self.usd_path = param.usd_path
         self.object_id = self.usd_path.split(os.sep)[-2]
+        self.object_scale = np.array(param.scale).tolist()
         object_prim = add_reference_to_stage(param.usd_path, object_prim_path)
     
         self._wait_for_loading()
@@ -85,6 +86,8 @@ class PickupObject(BaseTask):
         # use this to set relative position, orientation and scale
         xform_prim = XFormPrim(object_prim_path, translation= object_pos, orientation = object_rot, scale = np.array(param.scale))
         self._wait_for_loading()
+
+        
 
         if param.object_physics_properties:
             set_physics_properties(self.stage, object_prim, param.object_physics_properties)
