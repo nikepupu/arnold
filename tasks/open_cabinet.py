@@ -13,7 +13,7 @@ from utils.env import position_reached, rotation_reached, get_pre_grasp_action, 
 from omni.isaac.core.simulation_context import SimulationContext
 
 import logging
-
+import os
 
 class OpenCabinet(BaseTask):
     def __init__(self, num_stages, horizon, stage_properties, cfg) -> None:
@@ -76,9 +76,14 @@ class OpenCabinet(BaseTask):
         
         position = param.object_position
         rotation = param.orientation_quat
+        self.usd_path = param.usd_path
+        self.object_id = self.usd_path.split(os.sep)[-2]
+        self.object_scale = np.array(param.scale).tolist()
+
+        object_pos, object_rot = self._y_up_to_z_up(position=position, rotation=rotation)
         
         # use this to set relative position, orientation and scale
-        xform_prim = XFormPrim(object_prim_path, translation= position, orientation = rotation, scale = np.array(param.scale))
+        xform_prim = XFormPrim(object_prim_path, translation= object_pos, orientation = object_rot, scale = np.array(param.scale))
         self._wait_for_loading()
 
         if param.object_physics_properties:
@@ -121,6 +126,7 @@ class OpenCabinet(BaseTask):
             self.end_stage = 2
             if use_gt:
                 self.trans_pick, self.rotat_pick = self.gt_actions[1]
+                self.trans_pick, self.rotat_pick = self._y_up_to_z_up(position=self.trans_pick, rotation=self.rotat_pick)
             else:
                 self.trans_pick = act_pos
                 self.rotat_pick = act_rot
@@ -128,6 +134,7 @@ class OpenCabinet(BaseTask):
             self.end_stage = self.num_stages
             if use_gt:
                 self.trans_target, self.rotat_target = self.gt_actions[2]
+                self.trans_target, self.rotat_target = self._y_up_to_z_up(position=self.trans_target, rotation=self.rotat_target)
             else:
                 self.trans_target = act_pos
                 self.rotat_target = act_rot
@@ -155,6 +162,7 @@ class OpenCabinet(BaseTask):
                 if self.current_stage == 0:
                     if use_gt:
                         trans_pre, rotation_pre = self.gt_actions[0]
+                        trans_pre, rotation_pre = self._y_up_to_z_up(position=trans_pre, rotation=rotation_pre)
                     else:
                         trans_pre, rotation_pre = get_pre_grasp_action(
                             grasp_action=(self.trans_pick, self.rotat_pick),

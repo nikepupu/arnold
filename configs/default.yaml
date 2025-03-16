@@ -30,7 +30,7 @@ resume: null   # checkpoint file to resume training
 use_gt: [False, False]
 visualize: False
 eval_splits: [train, test, novel_object, novel_scene, novel_state]
-record: False
+record: True
 
 
 # ------------------environment------------------

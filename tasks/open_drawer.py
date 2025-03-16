@@ -13,7 +13,7 @@ from utils.env import position_reached, rotation_reached, get_pre_grasp_action, 
 from omni.isaac.core.simulation_context import SimulationContext
 
 import logging
-
+import os
 
 class OpenDrawer(BaseTask):
     def __init__(self, num_stages, horizon, stage_properties, cfg) -> None:
@@ -77,11 +77,14 @@ class OpenDrawer(BaseTask):
         position = param.object_position
         rotation = param.orientation_quat
 
+        self.usd_path = param.usd_path
         self.object_id = self.usd_path.split(os.sep)[-2]
         self.object_scale = np.array(param.scale).tolist()
+
+        object_pos, object_rot = self._y_up_to_z_up(position=position, rotation=rotation)
         
         # use this to set relative position, orientation and scale
-        xform_prim = XFormPrim(object_prim_path, translation= position, orientation = rotation, scale = np.array(param.scale))
+        xform_prim = XFormPrim(object_prim_path, translation= object_pos, orientation = object_rot, scale = np.array(param.scale))
         self._wait_for_loading()
 
         if param.object_physics_properties:
