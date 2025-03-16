@@ -7,6 +7,20 @@ For example, run:
         python eval.py task=multi model=peract lang_encoder=clip \
                        mode=eval use_gt=[0,0] visualize=0
 """
+
+
+# from environment.runner_utils import get_simulation
+# from isaacsim import SimulationApp
+
+# CONFIG = {"renderer": "RayTracedLighting", "headless": False}
+
+# Example ROS2 bridge sample demonstrating the manual loading of stages and manual publishing of images
+# simulation_app = SimulationApp(CONFIG)
+
+from isaacsim import SimulationApp
+
+simulation_app = SimulationApp({"headless": True, 'multi_gpu': False, 'renderer': 'RayTracedLighting', 'use_fabric': False, "anti_aliasing": 0})
+
 import hydra
 import json
 import logging
@@ -15,9 +29,8 @@ import os
 import torch
 from pathlib import Path
 from scipy.spatial.transform import Rotation as R
-
-from environment.runner_utils import get_simulation
-simulation_app, simulation_context, _ = get_simulation(headless=False, gpu_id=0)
+from omni.isaac.core import SimulationContext
+simulation_context = SimulationContext()
 
 from dataset import InstructionEmbedding
 from tasks import load_task
@@ -189,27 +202,26 @@ def main(cfg):
                         checker=env.checker,
                     )
 
-                try:
-                    for i in range(2):
-                        if use_gt[i]:
-                            obs, suc = env.step(act_pos=None, act_rot=None, render=render, use_gt=True)
-                        else:
-                            act_pos, act_rot = get_action(
-                                gt=obs, agent=agent, franka=env.robot, c_controller=env.c_controller, npz_file=anno, offset=offset, timestep=i,
-                                device=device, agent_type=cfg.model, obs_type=cfg.obs_type, lang_embed_cache=lang_embed_cache
-                            )
-
-                            logger.info(
-                                f"Prediction action {i}: trans={act_pos}, orient(euler XYZ)={R.from_quat(act_rot[[1,2,3,0]]).as_euler('XYZ', degrees=True)}"
-                            )
-
-                            obs, suc = env.step(act_pos=act_pos, act_rot=act_rot, render=render, use_gt=False)
-
-                        if suc == -1:
-                            break
                 
-                except:
-                    suc = -1
+                for i in range(2):
+                    if use_gt[i]:
+                        obs, suc = env.step(act_pos=None, act_rot=None, render=render, use_gt=True)
+                    else:
+                        act_pos, act_rot = get_action(
+                            gt=obs, agent=agent, franka=env.robot, c_controller=env.c_controller, npz_file=anno, offset=offset, timestep=i,
+                            device=device, agent_type=cfg.model, obs_type=cfg.obs_type, lang_embed_cache=lang_embed_cache
+                        )
+
+                        logger.info(
+                            f"Prediction action {i}: trans={act_pos}, orient(euler XYZ)={R.from_quat(act_rot[[1,2,3,0]]).as_euler('XYZ', degrees=True)}"
+                        )
+
+                        obs, suc = env.step(act_pos=act_pos, act_rot=act_rot, render=render, use_gt=False)
+
+                    if suc == -1:
+                        break
+                
+                
 
                 env.stop()
                 if suc == 1:

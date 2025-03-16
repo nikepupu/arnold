@@ -76,9 +76,10 @@ class OpenCabinet(BaseTask):
         
         position = param.object_position
         rotation = param.orientation_quat
+        position = np.array(position)/100.0
         
         # use this to set relative position, orientation and scale
-        xform_prim = XFormPrim(object_prim_path, translation= position, orientation = rotation, scale = np.array(param.scale))
+        xform_prim = XFormPrim(object_prim_path, translation= position, orientation = rotation, scale = np.array(param.scale)/100.0)
         self._wait_for_loading()
 
         if param.object_physics_properties:
@@ -121,6 +122,7 @@ class OpenCabinet(BaseTask):
             self.end_stage = 2
             if use_gt:
                 self.trans_pick, self.rotat_pick = self.gt_actions[1]
+                self.trans_pick = np.array(self.trans_pick)/100.0
             else:
                 self.trans_pick = act_pos
                 self.rotat_pick = act_rot
@@ -128,14 +130,16 @@ class OpenCabinet(BaseTask):
             self.end_stage = self.num_stages
             if use_gt:
                 self.trans_target, self.rotat_target = self.gt_actions[2]
+                self.trans_target = np.array(self.trans_target)/100.0
             else:
                 self.trans_target = act_pos
                 self.rotat_target = act_rot
 
             # interpolation for manipulation
-            num_interpolation = int(10 * np.linalg.norm(self.trans_target - self.trans_pick))
+            num_interpolation = int(1000 * np.linalg.norm(self.trans_target - self.trans_pick))
             alphas = np.linspace(start=0, stop=1, num=num_interpolation)[1:]
             joint_pos = self.checker.joint_checker.get_joint_position()
+
             position_rotation_interp_list = action_interpolation(
                 self.trans_pick, self.rotat_pick, self.trans_target, self.rotat_target, alphas, self.task, joint_pos=joint_pos
             )
@@ -155,6 +159,7 @@ class OpenCabinet(BaseTask):
                 if self.current_stage == 0:
                     if use_gt:
                         trans_pre, rotation_pre = self.gt_actions[0]
+                        trans_pre = np.array(trans_pre)/100.0
                     else:
                         trans_pre, rotation_pre = get_pre_grasp_action(
                             grasp_action=(self.trans_pick, self.rotat_pick),
@@ -175,10 +180,10 @@ class OpenCabinet(BaseTask):
                         self.current_stage += 1
                         continue
 
-            if position_reached( self.c_controller, current_target[0], self.robot, thres=(0.1 if self.current_stage == 1 else 0.5) ) \
-            and ( rotation_reached(self.c_controller, current_target[1]) or (self.current_stage == 2) ):
+            if position_reached( self.c_controller, current_target[0], self.robot, thres=(0.001 if self.current_stage == 1 else 0.005) ) \
+            and ( rotation_reached(self.c_controller, current_target[1]) ):
                 gripper_state = self.gripper_controller.get_joint_positions()
-                current_gripper_open = (gripper_state[0] + gripper_state[1] > 7)
+                current_gripper_open = (gripper_state[0] + gripper_state[1] > 0.07)
 
                 if current_target[2] != current_gripper_open:
                     if current_target[2] < 0.5:
@@ -206,10 +211,6 @@ class OpenCabinet(BaseTask):
                 target_joint_positions = self.c_controller.forward(
                     target_end_effector_position=current_target[0], target_end_effector_orientation=current_target[1]
                 )
-                if self.current_stage >= 2:
-                    # close force
-                    target_joint_positions.joint_positions[-2:] = -1
-                
                 articulation_controller = self.robot.get_articulation_controller()
                 articulation_controller.apply_action(target_joint_positions)
                 self.try_record(actions=target_joint_positions)

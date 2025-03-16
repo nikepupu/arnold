@@ -17,9 +17,9 @@ def set_mass(stage, prim: Usd.Prim, mass:float):
     mass_api = UsdPhysics.MassAPI.Get(stage, prim.GetPath())
     if not mass_api:
         mass_api = UsdPhysics.MassAPI.Apply(prim)
-        mass_api.CreateMassAttr().Set(mass)
+        mass_api.CreateMassAttr().Set(0.021)
     else:
-        mass_api.GetMassAttr().Set(mass)
+        mass_api.GetMassAttr().Set(0.021)
 
 
 def set_physics_material(stage, prim: Usd.Prim, object_physics_properties : ObjectPhysicsProperties):

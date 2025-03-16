@@ -12,15 +12,25 @@ from omni.isaac.core.utils.stage import set_stage_units, set_stage_up_axis, is_s
 from omni.isaac.core.utils.stage import add_reference_to_stage
 from omni.physx.scripts.utils import setStaticCollider
 from omni.kit.material.library import get_material_prim_path
-from omni.isaac.dynamic_control import _dynamic_control
+
 from omni.physx.scripts import physicsUtils
+# from isaacsim.sensors.camera import Camera
 
 import pxr
 from pxr import UsdPhysics, Gf, PhysxSchema, UsdShade
-import time
-from omni.isaac.synthetic_utils import SyntheticDataHelper
 from abc import ABC
 from omni.isaac.franka.controllers import RMPFlowController
+
+from typing import List, Optional
+
+import carb
+import numpy as np
+from omni.isaac.core.prims.rigid_prim import RigidPrim
+from omni.isaac.core.robots.robot import Robot
+from omni.isaac.core.utils.prims import get_prim_at_path
+from omni.isaac.core.utils.stage import add_reference_to_stage, get_stage_units
+from omni.isaac.manipulators.grippers.parallel_gripper import ParallelGripper
+from omni.isaac.nucleus import get_assets_root_path
 
 
 class BaseTask(ABC):
@@ -121,9 +131,6 @@ class BaseTask(ABC):
 
         initialize(self.robot)
 
-        # self.dc = _dynamic_control.acquire_dynamic_control_interface()
-        # self.articulation = self.dc.get_articulation("/World_0/franka")
-
         ########## let physics settle
         if simulation_context is not None:
             for _ in range(60):
@@ -151,7 +158,7 @@ class BaseTask(ABC):
 
     def _define_stage_properties(self):
         set_stage_up_axis(self.stage_properties.scene_up_axis)
-        set_stage_units(self.stage_properties.scene_stage_unit)
+        set_stage_units(1.0)
         self._set_up_physics_secne()
         
         skylight_path = '/skylight'
@@ -169,7 +176,7 @@ class BaseTask(ABC):
 
         scene.CreateGravityDirectionAttr().Set(self._gravityDirection)
 
-        self._gravityMagnitude = self.stage_properties.gravity_magnitude
+        self._gravityMagnitude = 9.81
         scene.CreateGravityMagnitudeAttr().Set(self._gravityMagnitude)
         
         physxSceneAPI = PhysxSchema.PhysxSceneAPI.Apply(scene.GetPrim())
@@ -192,21 +199,17 @@ class BaseTask(ABC):
         if not self._sensor_initialized:
             return None
         
-        sensor_types = [self.sensor_types] * self.num_envs * len(self.camera_paths)
-        verify_sensor_inits = [False] * self.num_envs * len(self.camera_paths)
-        wait_times =  [ 0.0 ] * self.num_envs * len(self.camera_paths)
 
         simulation_context = SimulationContext.instance()
         simulation_context.render()
 
-        time.sleep(0.05)
-        simulation_context.render()
-        simulation_context.render()
+        point_clouds = []
+        gts = {}
+        # for camera in BaseTask.cameras:
+        #     point_cloud = camera.get_pointcloud()
+        #     point_clouds.append(point_cloud)
         
-        gts = list(map(SyntheticDataHelper.get_groundtruth, self.sd_helpers, sensor_types,
-                       self.viewport_windows, verify_sensor_inits, wait_times))
-        
-        gts = { 'images': gts, 'semantic_id': self.sd_helpers[0].get_semantic_id_map() }
+        # gts = { 'point_clouds': point_clouds }
         
         return gts
 
@@ -232,7 +235,7 @@ class BaseTask(ABC):
         furniture_prim = self.stage.GetPrimAtPath(f"{house_prim_path}/{self.scene_parameters[index].furniture_path}")
         room_struct_prim = self.stage.GetPrimAtPath(f"{house_prim_path}/{self.scene_parameters[index].wall_path}")
           
-        house_prim = XFormPrim(house_prim_path)
+        house_prim = XFormPrim(house_prim_path, scale=(0.01, 0.01, 0.01))
         # print(euler_angles_to_quat(np.array([np.pi/2, 0, 0])) )
         house_prim.set_local_pose(np.array([0,0,0]) )
         # house_prim.set_local_pose(np.array([0,0,0]),  euler_angles_to_quat(np.array([np.pi/2, 0, 0])) )
@@ -341,9 +344,9 @@ class BaseTask(ABC):
 
         robot = Franka(
                 prim_path = prim_path, name = f"my_frankabot{index}",
-                usd_path = self.robot_parameters[index].usd_path,
+                # usd_path = self.robot_parameters[index].usd_path,
                 orientation = rotation,
-                position = position,
+                position = position/100.0,
                 end_effector_prim_name = 'panda_rightfinger',
                 gripper_dof_names = ["panda_finger_joint1", "panda_finger_joint2"],
             )
@@ -356,40 +359,16 @@ class BaseTask(ABC):
 
     def _set_sensors(self):
         self._register_camera_path()
-        BaseTask.sd_helpers = [] 
-        BaseTask.viewport_windows = []
-
-        if len(BaseTask.viewport_handles) == 0:
-            for idx, camera_path in enumerate(self.camera_paths):
-                print("camera_path: ", camera_path)
-                viewport_handle = omni.kit.viewport_legacy.get_viewport_interface().create_instance()
-                viewport_window = omni.kit.viewport_legacy.get_viewport_interface().get_viewport_window(viewport_handle)
-                viewport_window.set_active_camera(camera_path)
-                viewport_window.set_texture_resolution(*self.sensor_resolution)
-                # viewport_window.set_window_pos(300*int(idx/2), 300 * int(idx%2))
-                viewport_window.set_window_pos(1000, 400)
-                viewport_window.set_window_size(300, 300)
-
-                sd_helper = SyntheticDataHelper()
-                sd_helper.initialize(sensor_names=self.sensor_types, viewport=viewport_window)
-                BaseTask.sd_helpers.append(sd_helper)
-                BaseTask.viewport_windows.append(viewport_window)
-                BaseTask.viewport_handles.append(viewport_handle)
-        
-        else:
-            for viewport_handle, camera_path in zip( BaseTask.viewport_handles , self.camera_paths):
-                viewport_window = omni.kit.viewport_legacy.get_viewport_interface().get_viewport_window(viewport_handle)
-                viewport_window.set_active_camera(camera_path)
-                viewport_window.set_texture_resolution(*self.sensor_resolution)
-                viewport_window.set_window_pos(1000, 400)
-                viewport_window.set_window_size(300, 300)
-
-                BaseTask.viewport_windows.append(viewport_window)
-                sd_helper = SyntheticDataHelper()
-                sd_helper.initialize(sensor_names=self.sensor_types, viewport=viewport_window)
-                BaseTask.sd_helpers.append(sd_helper)
-        
-        self.kit.update()
+        # BaseTask.cameras = []
+        # for camera_path in self.camera_paths:
+        #     camera = Camera(
+        #         prim_path=camera_path,
+        #         resolution=(128, 128),
+        #     )
+        #     camera.initialize()
+        #     camera.add_pointcloud_to_frame()
+        #     BaseTask.cameras.append(camera)
+        # self.kit.update()
         self._sensor_initialized = True
     
     def _register_camera_path(self):

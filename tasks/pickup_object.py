@@ -11,7 +11,7 @@ import omni
 from omni.isaac.core.prims import XFormPrim
 from environment.physics_utils import set_physics_properties
 import logging
-
+import numpy as np
 
 class PickupObject(BaseTask):
     def __init__(self, num_stages, horizon, stage_properties, cfg) -> None:
@@ -75,8 +75,9 @@ class PickupObject(BaseTask):
         position = param.object_position
         rotation = param.orientation_quat
         
+        position = np.array(position)/100.0
         # use this to set relative position, orientation and scale
-        xform_prim = XFormPrim(object_prim_path, translation= position, orientation = rotation, scale = np.array(param.scale))
+        xform_prim = XFormPrim(object_prim_path, translation= position, orientation = rotation, scale = np.array(param.scale)/100.0)
         self._wait_for_loading()
 
         if param.object_physics_properties:
@@ -103,6 +104,7 @@ class PickupObject(BaseTask):
             self.end_stage = 2
             if use_gt:
                 self.trans_pick, self.rotat_pick = self.gt_actions[1]
+                self.trans_pick = np.array(self.trans_pick)/100.0
             else:
                 self.trans_pick = act_pos
                 self.rotat_pick = act_rot
@@ -110,6 +112,7 @@ class PickupObject(BaseTask):
             self.end_stage = self.num_stages
             if use_gt:
                 self.trans_target, self.rotat_target = self.gt_actions[2]
+                self.trans_target = np.array(self.trans_target)/100.0
             else:
                 self.trans_target = act_pos
                 self.rotat_target = act_rot
@@ -128,6 +131,7 @@ class PickupObject(BaseTask):
                 if self.current_stage == 0:
                     if use_gt:
                         trans_pre, rotation_pre = self.gt_actions[0]
+                        trans_pre = np.array(trans_pre)/100.0
                     else:
                         trans_pre, rotation_pre = get_pre_grasp_action(
                             grasp_action=(self.trans_pick, self.rotat_pick),
@@ -141,10 +145,10 @@ class PickupObject(BaseTask):
                 else:
                     current_target = (self.trans_target, self.rotat_target, grip_open)
             
-            if position_reached( self.c_controller, current_target[0], self.robot, thres=(0.1 if self.current_stage == 1 else 0.5) ) \
+            if position_reached( self.c_controller, current_target[0], self.robot, thres=(0.001 if self.current_stage == 1 else 0.005) ) \
             and rotation_reached( self.c_controller, current_target[1] ):
                 gripper_state = self.gripper_controller.get_joint_positions()
-                current_gripper_open = (gripper_state[0] + gripper_state[1] > 7)
+                current_gripper_open = (gripper_state[0] + gripper_state[1] > 0.07)
                 
                 if current_target[2] != current_gripper_open:
                     if current_target[2] < 0.5:
@@ -168,12 +172,13 @@ class PickupObject(BaseTask):
                 self.logger.info(f"enter stage {self.current_stage}")
             
             else:
+                
                 target_joint_positions = self.c_controller.forward(
                     target_end_effector_position=current_target[0], target_end_effector_orientation=current_target[1]
                 )
-                if self.current_stage >= 2:
-                    # close force
-                    target_joint_positions.joint_positions[-2:] = -1
+                # if self.current_stage >= 2:
+                #     # close force
+                #     target_joint_positions.joint_positions[-2:] = 0.0
                 
                 articulation_controller = self.robot.get_articulation_controller()
                 articulation_controller.apply_action(target_joint_positions)

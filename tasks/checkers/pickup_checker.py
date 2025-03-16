@@ -1,11 +1,12 @@
 import omni
+import omni.usd
 from omni.isaac.core.prims import XFormPrim
 from .base_checker import BaseChecker
 from environment.parameters import CheckerParameters
 
 
 class PickupChecker(BaseChecker):
-    def __init__(self, checker_parameters: CheckerParameters, tolerance = 5) -> None:
+    def __init__(self, checker_parameters: CheckerParameters, tolerance = 0.05) -> None:
         self.checker_parameters = checker_parameters
         self.tolerance = tolerance
 
@@ -13,7 +14,7 @@ class PickupChecker(BaseChecker):
         super().__init__()
 
         self.target_prim_path =  target_prim_path
-        self.target_delta_y = self.checker_parameters.target_state
+        self.target_delta_y = self.checker_parameters.target_state/100.0
         self.targetRigid = XFormPrim(self.target_prim_path)
         self.previous_pos = None
         self.vel = None

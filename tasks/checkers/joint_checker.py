@@ -4,7 +4,8 @@ from omni.isaac.core.prims import XFormPrim
 from omni.isaac.dynamic_control import _dynamic_control
 from .base_checker import BaseChecker
 from environment.parameters import CheckerParameters
-
+import omni.physics.tensors.impl.api as physx
+from omni.isaac.core.simulation_context import SimulationContext
 
 class JointCheck():
     def __init__(self, joint_prim, joint_name) -> None:
@@ -22,9 +23,10 @@ class JointCheck():
         self.type = self.prim.GetTypeName()
         self.full_name = self.prim.GetPath().pathString
         self.joint = self.stage.GetPrimAtPath(self.full_name)
+       
 
     def get_joint_position(self):
-        body1 = self.joint.GetRelationship("physics:body1").GetTargets()[0]
+        body1 = str(self.joint.GetRelationship("physics:body1").GetTargets()[0])
         
         return XFormPrim(body1).get_world_pose()[0]
     
@@ -72,7 +74,7 @@ class JointCheck():
         self.dc = _dynamic_control.acquire_dynamic_control_interface()
         self.art = self.dc.get_articulation(self.full_name)
         dof_ptr = self.dc.find_articulation_dof(self.art, self.joint_name)
-       
+        
         
         tmp = percentage / 100.0 *(self.upper-self.lower) + self.lower
         if self.type == 'PhysicsPrismaticJoint':
