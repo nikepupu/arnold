@@ -17,9 +17,9 @@ def set_mass(stage, prim: Usd.Prim, mass:float):
     mass_api = UsdPhysics.MassAPI.Get(stage, prim.GetPath())
     if not mass_api:
         mass_api = UsdPhysics.MassAPI.Apply(prim)
-        mass_api.CreateMassAttr().Set(0.021)
+        mass_api.CreateMassAttr().Set(mass)
     else:
-        mass_api.GetMassAttr().Set(0.021)
+        mass_api.GetMassAttr().Set(mass)
 
 
 def set_physics_material(stage, prim: Usd.Prim, object_physics_properties : ObjectPhysicsProperties):
@@ -57,11 +57,23 @@ def set_physics_properties(stage, prim : Usd.Prim, properties: ObjectPhysicsProp
     if HAS_PHYSICS_MATERIAL in properties.properties and  properties.properties[HAS_PHYSICS_MATERIAL]:
         set_physics_material(stage, prim, properties)
 
+        # hacky fix for cabinet need to test if the current object is cabinet, in the prim names
+        if "cabinet" in prim.GetName().lower():
+            # find the parent prim
+            parent_prim = prim.GetParent()
+            # find grand parent prim
+            grand_parent_prim = parent_prim.GetParent()
+            # find collision prim
+            collision_prim = grand_parent_prim.GetChild("collisions")
+            # set physics material to collision prim and test if collision prim is valid
+            if collision_prim:
+                set_physics_material(stage, collision_prim, properties)
+
     if MASS in properties.properties:
         set_mass(stage, prim, properties.properties[MASS])
     
     if DAMPING_COEFFICIENT in properties.properties:
-        set_joint_properties(stage, prim, properties.properties[DAMPING_COEFFICIENT] )
+        set_joint_properties(stage, prim, properties.properties[DAMPING_COEFFICIENT]/100.0 )
 
 
 def set_joint_properties(stage, prim, damping_cofficient):

@@ -236,8 +236,10 @@ class BaseTask(ABC):
         room_struct_prim = self.stage.GetPrimAtPath(f"{house_prim_path}/{self.scene_parameters[index].wall_path}")
           
         house_prim = XFormPrim(house_prim_path, scale=(0.01, 0.01, 0.01))
-        # print(euler_angles_to_quat(np.array([np.pi/2, 0, 0])) )
         house_prim.set_local_pose(np.array([0,0,0]) )
+        
+        # print(euler_angles_to_quat(np.array([np.pi/2, 0, 0])) )
+        # house_prim.set_local_pose(np.array([0,0,0]) )
         # house_prim.set_local_pose(np.array([0,0,0]),  euler_angles_to_quat(np.array([np.pi/2, 0, 0])) )
 
         furniture_prim = self.stage.GetPrimAtPath(f"{house_prim_path}/{self.scene_parameters[index].furniture_path}")
