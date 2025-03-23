@@ -140,7 +140,7 @@ class OpenCabinet(BaseTask):
                 self.rotat_target = act_rot
 
             # interpolation for manipulation
-            num_interpolation = int(10 * np.linalg.norm(self.trans_target - self.trans_pick))
+            num_interpolation = int(1000 * np.linalg.norm(self.trans_target - self.trans_pick))
             alphas = np.linspace(start=0, stop=1, num=num_interpolation)[1:]
             joint_pos = self.checker.joint_checker.get_joint_position()
             position_rotation_interp_list = action_interpolation(
