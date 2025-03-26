@@ -34,7 +34,7 @@ simulation_context = SimulationContext()
 
 from dataset import InstructionEmbedding
 from tasks import load_task
-from utils.env import get_action
+from local_utils.env import get_action
 
 logger = logging.getLogger(__name__)
 

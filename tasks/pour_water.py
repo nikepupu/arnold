@@ -9,10 +9,10 @@ from omni.isaac.core.utils.semantics import add_update_semantics
 import omni
 from omni.isaac.core.prims import XFormPrim
 from environment.physics_utils import set_physics_properties
-from utils.env import position_reached, rotation_reached, get_pre_grasp_action, action_interpolation
+from local_utils.env import position_reached, rotation_reached, get_pre_grasp_action, action_interpolation
 from omni.isaac.core.simulation_context import SimulationContext
 from environment.fluid_utils import set_particle_system_for_cup
-from utils.transforms import get_pose_relat, euler_angles_to_quat, quat_to_rot_matrix, matrix_to_quat, quat_diff_rad
+from local_utils.transforms import get_pose_relat, euler_angles_to_quat, quat_to_rot_matrix, matrix_to_quat, quat_diff_rad
 
 from pxr import Gf
 import logging

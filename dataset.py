@@ -6,8 +6,8 @@ import numpy as np
 from torch.utils.data import Dataset
 from scipy.spatial.transform import Rotation as R
 from cliport6d.utils.utils import get_fused_heightmap
-from utils.env import CAMERAS
-from utils.transforms import get_pose_world, create_pcd_hardcode
+from local_utils.env import CAMERAS
+from local_utils.transforms import get_pose_world, create_pcd_hardcode
 
 pickle.DEFAULT_PROTOCOL=pickle.HIGHEST_PROTOCOL
 RANDOM_SEED=1125

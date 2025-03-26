@@ -22,7 +22,7 @@ simulation_app, simulation_context, _ = get_simulation(headless=True, gpu_id=0)
 
 from dataset import InstructionEmbedding
 from tasks import load_task
-from utils.env import get_action
+from local_utils.env import get_action
 
 logger = logging.getLogger(__name__)
 

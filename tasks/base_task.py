@@ -1,6 +1,6 @@
 
 from environment.parameters import *
-from utils.recorder import DataRecorder
+from local_utils.recorder import DataRecorder
 
 import omni
 from omni.isaac.core.prims import XFormPrim
@@ -10,11 +10,13 @@ from omni.isaac.core.utils.semantics import add_update_semantics
 from omni.isaac.core.simulation_context import SimulationContext
 from omni.isaac.core.utils.stage import set_stage_units, set_stage_up_axis, is_stage_loading
 from omni.isaac.core.utils.stage import add_reference_to_stage
+# from omni.isaac.sensor import Camera
 from omni.physx.scripts.utils import setStaticCollider
 from omni.kit.material.library import get_material_prim_path
 
 from omni.physx.scripts import physicsUtils
-# from isaacsim.sensors.camera import Camera
+import isaacsim.core.utils.numpy.rotations as rot_utils
+from isaacsim.sensors.camera import Camera
 
 import pxr
 from pxr import UsdPhysics, Gf, PhysxSchema, UsdShade
@@ -151,6 +153,10 @@ class BaseTask(ABC):
         if self.cfg.record:
             self.register_recorder()
 
+        # render=True for valid rendering results
+        for _ in range(100):
+            simulation_context.step(render=True)
+
         return self.render()
 
     def step(self):
@@ -196,22 +202,38 @@ class BaseTask(ABC):
         # physxSceneAPI.GetGpuHeapCapacityAttr().Set(67108864)
         
     def render(self):
-        if not self._sensor_initialized:
-            return None
-        
+        # if not self._sensor_initialized:
+        #     return None
 
-        simulation_context = SimulationContext.instance()
-        simulation_context.render()
+        # simulation_context = SimulationContext.instance()
+        # simulation_context.render()
 
-        point_clouds = []
-        gts = {}
+        # point_clouds = []
+        # gts = {}
         # for camera in BaseTask.cameras:
         #     point_cloud = camera.get_pointcloud()
         #     point_clouds.append(point_cloud)
         
         # gts = { 'point_clouds': point_clouds }
-        
-        return gts
+
+        if not self._sensor_initialized:
+            return None
+
+        gts = list(map(Camera.get_current_frame, self.cameras))
+        outputs = []
+        for i, gt in enumerate(gts):
+            # print(gt)
+            output = {'camera': self.camera_configs[i]}
+            output['camera']['pose'] = self.cameras[i]._backend_utils.inverse(self.cameras[i].get_view_matrix_ros())
+            if 'rgba' in gt:
+                output['rgb'] = gt['rgba'].copy()
+            if 'distance_to_image_plane' in gt:
+                output['depthLinear'] = gt['distance_to_image_plane'].copy() if gt['distance_to_image_plane'] is not None else None
+            if 'semantic_segmentation' in gt:
+                output['semanticSegmentation'] = gt['semantic_segmentation'].copy() if gt['semantic_segmentation'] is not None else None
+            outputs.append(output)
+
+        return {'images': outputs}
 
     def clear(self):
         from pxr import Sdf, Usd
@@ -360,7 +382,7 @@ class BaseTask(ABC):
         return robot
 
     def _set_sensors(self):
-        self._register_camera_path()
+        # self._register_camera_path()
         # BaseTask.cameras = []
         # for camera_path in self.camera_paths:
         #     camera = Camera(
@@ -371,8 +393,41 @@ class BaseTask(ABC):
         #     camera.add_pointcloud_to_frame()
         #     BaseTask.cameras.append(camera)
         # self.kit.update()
+        # self._sensor_initialized = True
+
+        self._register_camera_path()
+        BaseTask.cameras = []
+
+        for idx, camera_path in enumerate(self.camera_paths):
+            print("camera_path: ", camera_path)
+            camera = Camera(
+                prim_path=camera_path, frequency=20,
+                resolution=self.sensor_resolution,
+                # position=np.array([0.0, 0.0, 25.0]),
+                # orientation=rot_utils.euler_angles_to_quats(np.array([0, 90, 0]), degrees=True)
+            )
+            camera.initialize()
+            for sensor_type in self.sensor_types:
+                if 'depth' in sensor_type:
+                    camera.add_distance_to_image_plane_to_frame()
+                elif 'semantic' in sensor_type:
+                    camera.add_semantic_segmentation_to_frame()
+            BaseTask.cameras.append(camera)
+
+        self.kit.update()
         self._sensor_initialized = True
-    
+
+        # camera configs
+        self.camera_configs = []
+        for camera in self.cameras:
+            width, height = camera.get_resolution()
+            camera_config = {
+                'resolution': {'width': width, 'height': height},
+                'focal_length': camera.get_focal_length(),
+                'horizontal_aperture': camera.get_horizontal_aperture(),
+            }
+            self.camera_configs.append(camera_config)
+
     def _register_camera_path(self):
         self.camera_paths = []
         

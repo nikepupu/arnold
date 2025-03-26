@@ -5,7 +5,7 @@ from omni.isaac.core.utils.string import find_unique_string_name
 from omni.isaac.core.utils.stage import add_reference_to_stage
 from omni.isaac.core.utils.prims import is_prim_path_valid
 from omni.isaac.core.utils.semantics import add_update_semantics
-from utils.env import position_reached, rotation_reached, get_pre_grasp_action
+from local_utils.env import position_reached, rotation_reached, get_pre_grasp_action
 from omni.isaac.core.simulation_context import SimulationContext
 import omni
 from omni.isaac.core.prims import XFormPrim

@@ -9,7 +9,7 @@ from omni.isaac.core.utils.semantics import add_update_semantics
 import omni
 from omni.isaac.core.prims import XFormPrim
 from environment.physics_utils import set_physics_properties
-from utils.env import position_reached, rotation_reached, get_pre_grasp_action, action_interpolation
+from local_utils.env import position_reached, rotation_reached, get_pre_grasp_action, action_interpolation
 from omni.isaac.core.simulation_context import SimulationContext
 
 import logging
