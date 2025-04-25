@@ -19,7 +19,7 @@ For example, run:
 
 from isaacsim import SimulationApp
 
-simulation_app = SimulationApp({"headless": True, 'multi_gpu': False, 'renderer': 'RayTracedLighting', 'use_fabric': False, "anti_aliasing": 0})
+simulation_app = SimulationApp({"headless": False, 'multi_gpu': False, 'renderer': 'RayTracedLighting', 'use_fabric': False, "anti_aliasing": 0})
 
 import hydra
 import json
@@ -58,7 +58,7 @@ def load_agent(cfg, device):
         for fname in os.listdir(cfg.checkpoint_dir):
             if fname.endswith('best.pth'):
                 checkpoint_path = os.path.join(cfg.checkpoint_dir, fname)
-    
+
     assert checkpoint_path is not None, "best checkpoint not found"
     lang_embed_cache = None
     if cfg.model == 'cliport6d':
@@ -68,7 +68,7 @@ def load_agent(cfg, device):
         agent.load_state_dict(checkpoint['state_dict'])
         agent.eval()
         agent.to(device)
-    
+
     elif cfg.model == 'peract':
         from train_peract import create_agent, create_lang_encoder
         agent = create_agent(cfg, device=device)
@@ -87,7 +87,7 @@ def load_agent(cfg, device):
 
     else:
         raise ValueError(f'{cfg.model} agent not supported')
-    
+
     logger.info(f"Loaded {cfg.model} from {checkpoint_path}")
     return agent, lang_embed_cache
 
@@ -151,7 +151,7 @@ def main(cfg):
                 eval_log[task][eval_split] = {}
             elif 'score' in eval_log[task][eval_split]:
                 continue
-            
+
             if os.path.exists(os.path.join(cfg.data_root, task, eval_split)):
                 logger.info(f'Evaluating {task} {eval_split}')
                 data, fnames = load_data(data_path=os.path.join(cfg.data_root, task, eval_split))
@@ -184,7 +184,7 @@ def main(cfg):
 
                 env, object_parameters, robot_parameters, scene_parameters = load_task(cfg.asset_root, npz=anno, cfg=cfg)
 
-                obs = env.reset(robot_parameters, scene_parameters, object_parameters, 
+                obs = env.reset(robot_parameters, scene_parameters, object_parameters,
                                 robot_base=robot_base, gt_actions=gt_actions)
 
                 logger.info(f'Instruction: {gt_frames[0]["instruction"]}')
@@ -202,7 +202,7 @@ def main(cfg):
                         checker=env.checker,
                     )
 
-                
+
                 for i in range(2):
                     if use_gt[i]:
                         obs, suc = env.step(act_pos=None, act_rot=None, render=render, use_gt=True)
@@ -220,8 +220,8 @@ def main(cfg):
 
                     if suc == -1:
                         break
-                
-                
+
+
 
                 env.stop()
                 if suc == 1:

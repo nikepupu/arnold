@@ -2,9 +2,9 @@ hydra:
   run:
     dir: ${exp_dir}
 
-base_root: /home/rgong/Desktop/arnold
-data_root: /home/rgong/Desktop/arnold/workspace/data
-asset_root: /home/rgong/Desktop/arnold/workspace
+base_root: /home/haoran/Project/RoboVerse/RoboVerse/third_party/arnold
+data_root: /home/haoran/Project/RoboVerse/RoboVerse/third_party/arnold/dataset/data
+asset_root: /home/haoran/Project/RoboVerse/RoboVerse/third_party/arnold/dataset
 output_root: ${base_root}/output
 
 mode: train   # train or eval
@@ -37,7 +37,7 @@ record: False
 cameras: [front, base, left, wrist_bottom, wrist]
 img_size: 128
 offset_bound: [-0.63, 0, -0.63, 0.63, 1.26, 0.63]
-iso_surface: False
+iso_surface: True
 
 
 # ------------------cliport6d------------------

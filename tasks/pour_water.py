@@ -607,6 +607,17 @@ class PourWater(BaseTask):
                 self.try_record(actions=target_joint_positions)
 
             simulation_context.step(render=render)
+            obs_ = self.render()
+            for obs_i, obs_ in enumerate(obs_["images"]):
+                import cv2, datetime, os
+                time_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                rgb = obs_["rgb"]
+                rgb = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+                if self.time_step == 0:
+                    self.dir = f"512new_{time_str}"
+                    os.makedirs(self.dir, exist_ok=True)
+                step_str = f"{self.time_step:06d}"
+                cv2.imwrite(f"{self.dir}/{obs_i}_{step_str}.png", rgb)
             self.time_step += 1
 
         if self.current_stage == self.num_stages:
