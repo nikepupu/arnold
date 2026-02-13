@@ -8,5 +8,11 @@ dependencies = [
     "wandb>=0.24.2",
 ]
 
+[dependency-groups]
+dev = [
+    "ipdb>=0.13",
+    "ipython>=8.0",
+]
+
 [tool.setuptools.packages.find]
-include = ["renewed_tasks*"]
+include = ["renewed_tasks*", "renewed_utils*"]

@@ -20,7 +20,8 @@ For local development on your machine:
 # Ensure ISAACLAB_PATH is set
 export ISAACLAB_PATH=/path/to/isaac_lab
 ## e.g.
-## export ISAACLAB_PATH=/home/yizzhao/Projects/IsaacLab
+## export ISAACLAB_PATH=/home/yizzhao/Projects/IsaacLab 
+## export ISAACLAB_PATH=/home/linfan/Projects/IsaacLab/IsaacLab
 
 # Install all dependencies and packages
 ./scripts/setup/install_deps_local.sh
