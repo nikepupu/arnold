@@ -15,4 +15,4 @@ dev = [
 ]
 
 [tool.setuptools.packages.find]
-include = ["renewed_tasks*", "renewed_utils*"]
+include = ["renewed_tasks*", "renewed_utils*", "environment*"]
