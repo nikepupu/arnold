@@ -1,3 +1,35 @@
+# New Guide 2025 
+
+## 1. Installation
+
+### Prerequisites
+
+Install Isaac Lab 2.3.2: Follow the [installation guide](https://isaac-sim.github.io/IsaacLab/v2.3.1/source/setup/installation/index.html). Note that Isaac Sim 5.1 is required to use the verified USD provided in this project. We recommend using the conda installation. Remember to check out the specific branch as follows.
+
+```bash
+# Ensure you're using version 2.3.2
+git checkout v2.3.2
+```
+
+
+### Local Development Setup
+
+For local development on your machine:
+
+```
+# Ensure ISAACLAB_PATH is set
+export ISAACLAB_PATH=/path/to/isaac_lab
+## e.g.
+## export ISAACLAB_PATH=/home/yizzhao/Projects/IsaacLab
+
+# Install all dependencies and packages
+./scripts/setup/install_deps_local.sh
+
+# Verify the custom rsl_rl is correctly installed
+${ISAACLAB_PATH}/isaaclab.sh -p scripts/verify_rsl_rl.py
+```
+
+
 <h2 align="center">
   <b><tt>ARNOLD</tt>: A Benchmark for Language-Grounded Task Learning With Continuous States in Realistic 3D Scenes</b>
 </h2>
