@@ -1,12 +1,13 @@
 ASSET_ROOT = "/home/linfan/Projects/arnold/asset"
 
 import os
+import numpy as np
 
 from environment.parameters import SceneParameters, ObjectParameters, StageProperties, \
     ObjectPhysicsProperties, RobotParameters, CheckerParameters, FluidPhysicsProperties
 
-
 def handle_part_predicate(prim_path: str):
+    from isaacsim.core.utils.prims import get_prim_at_path
     prim = get_prim_at_path(prim_path)
     if "handle" in prim.GetPath().pathString and prim.GetTypeName() == "Mesh":
         return True
@@ -15,6 +16,7 @@ def handle_part_predicate(prim_path: str):
 
 
 def joint_part_predicate(prim_path:str):
+    from isaacsim.core.utils.prims import get_prim_at_path
     prim = get_prim_at_path(prim_path)
     if "joint" in prim.GetPath().pathString and \
         (prim.GetTypeName() == "PhysicsPrismaticJoint" or prim.GetTypeName() == "PhysicsRevoluteJoint"):
@@ -24,6 +26,7 @@ def joint_part_predicate(prim_path:str):
 
 
 def cup_shape_predicate(prim_path: str):
+    from isaacsim.core.utils.prims import get_prim_at_path
     prim = get_prim_at_path(prim_path)
     if "cupShape" in prim.GetPath().pathString and prim.GetTypeName() == "Mesh":
         return True
@@ -161,10 +164,10 @@ def load_task(npz):
             #     object_parameters.update({
             #         'object_timeline_management': WaterChecker(checker_parameters=checker_parameters)
             #     })
-            # else:
-            #     object_parameters.update({
-            #         'object_timeline_management': JointChecker(checker_parameters=checker_parameters)
-            #     })
+            else:
+                object_parameters.update({
+                    'object_timeline_management': JointChecker(checker_parameters=checker_parameters)
+                })
         else:
             object_parameters.update({
                 'object_timeline_management': None
@@ -182,8 +185,18 @@ def load_task(npz):
     light_usd_path = os.path.join(ASSET_ROOT, 'sample/light/skylight.usd')
     stage_properties = StageProperties(light_usd_path, "y", 0.01, gravity_direction=[0,-1,0], gravity_magnitude=981)
 
-    import ipdb; ipdb.set_trace()
-
     task_name = object_parameters['args']['task_type']
 
+    # TODO: Add more task types
+    if object_parameters['args']['task_type'] == 'pickup_object':
+        pass
+        # env = PickupObject(cfg.num_stages[task_name], cfg.horizon, stage_properties=stage_properties, cfg=cfg)
+    elif object_parameters['args']['task_type'] == 'close_cabinet':
+        from .close_cabinet import CloseCabinet
+        env = CloseCabinet(3, 2400, stage_properties=stage_properties, record=False)
+    else:
+        raise Exception(f"task not implemented: {object_parameters['args']['task_type']}")
+
+    robot_parameters[0].robot_position += np.array(robot_shift)
+    return env, objects_parameters[0], robot_parameters, scene_parameters
     

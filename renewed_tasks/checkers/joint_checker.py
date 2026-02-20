@@ -1,11 +1,11 @@
 import math
 import omni
-from omni.isaac.core.prims import XFormPrim
-from omni.isaac.dynamic_control import _dynamic_control
+from isaacsim.core.prims import XFormPrim
+from isaacsim.dynamic_control import _dynamic_control
 from .base_checker import BaseChecker
 from environment.parameters import CheckerParameters
 import omni.physics.tensors.impl.api as physx
-from omni.isaac.core.simulation_context import SimulationContext
+from isaacsim.core.simulation_context import SimulationContext
 
 class JointCheck():
     def __init__(self, joint_prim, joint_name) -> None:

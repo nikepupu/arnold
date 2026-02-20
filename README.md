@@ -26,8 +26,6 @@ export ISAACLAB_PATH=/path/to/isaac_lab
 # Install all dependencies and packages
 ./scripts/setup/install_deps_local.sh
 
-# Verify the custom rsl_rl is correctly installed
-${ISAACLAB_PATH}/isaaclab.sh -p scripts/verify_rsl_rl.py
 ```
 
 

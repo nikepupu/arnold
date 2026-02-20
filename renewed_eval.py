@@ -10,7 +10,6 @@ from renewed_tasks import load_task
 
 from isaaclab.app import AppLauncher
 
-
 # create argparser
 parser = argparse.ArgumentParser(description="Eval or Replay")
 parser.add_argument("--task", type=str, default=None, help="Name of the task.")
@@ -26,11 +25,17 @@ args_cli = parser.parse_args()
 app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
+
+from isaaclab.sim import SimulationCfg, SimulationContext
 logger = logging.getLogger(__name__)
+
 
 def main():
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     render = args_cli.visualize
+
+    sim_cfg = SimulationCfg(dt=0.05, device=device)
+    sim_context = SimulationContext(sim_cfg)
 
 
     #TODO: enable water tasks
@@ -109,6 +114,12 @@ def main():
     env, object_parameters, robot_parameters, scene_parameters = load_task(npz=anno)
 
     import ipdb; ipdb.set_trace()
+
+    obs = env.reset(robot_parameters, scene_parameters, object_parameters, 
+        robot_base=robot_base, gt_actions=gt_actions)
+
+    import ipdb; ipdb.set_trace()
+
     
 
 if __name__ == "__main__":

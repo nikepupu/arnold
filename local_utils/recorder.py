@@ -2,8 +2,8 @@ import os
 import omni.ext
 import omni.appwindow
 import numpy as np
-from omni.isaac.core.prims import XFormPrim
-from omni.isaac.core.utils.types import ArticulationAction
+from isaacsim.core.prims import XFormPrim
+from isaacsim.core.utils.types import ArticulationAction
 import gzip
 import json
 

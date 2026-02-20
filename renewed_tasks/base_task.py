@@ -7,6 +7,7 @@ from isaacsim.core.utils.extensions import enable_extension
 enable_extension("isaacsim.robot.manipulators.examples")
 
 import isaaclab.sim as sim_utils
+import torch
 
 from isaacsim.core.prims import XFormPrim
 from isaacsim.core.utils.prims import is_prim_path_valid, get_prim_at_path, delete_prim
@@ -32,20 +33,20 @@ from typing import List, Optional
 
 import carb
 import numpy as np
-from isaacsim.core.prims.rigid_prim import RigidPrim
-from isaacsim.core.robots.robot import Robot
+from isaacsim.core.prims import RigidPrim
+from isaacsim.core.api.robots.robot import Robot
 from isaacsim.core.utils.prims import get_prim_at_path
 from isaacsim.core.utils.stage import add_reference_to_stage, get_stage_units
-from isaacsim.manipulators.grippers.parallel_gripper import ParallelGripper
-from isaacsim.nucleus import get_assets_root_path
+from isaacsim.robot.manipulators.grippers.parallel_gripper import ParallelGripper
+# from isaacsim.nucleus import get_assets_root_path
 
 
 class BaseTask(ABC):
     material_library = {}
     viewport_handles = []
     
-    def __init__(self, num_stages, horizon, stage_properties, cfg) -> None:
-        self.cfg = cfg
+    def __init__(self, num_stages, horizon, stage_properties, record=False) -> None:
+        self.record = record
         self.num_stages = num_stages
         self.horizon = horizon
         self.stage_properties: StageProperties = stage_properties
@@ -155,7 +156,7 @@ class BaseTask(ABC):
         self.gripper_controller = self.robot.gripper
         self.c_controller = RMPFlowController(name="cspace_controller", robot_articulation=self.robot, physics_dt=1/120.0)
 
-        if self.cfg.record:
+        if self.record:
             self.register_recorder()
 
         # render=True for valid rendering results
@@ -262,8 +263,8 @@ class BaseTask(ABC):
         furniture_prim = self.stage.GetPrimAtPath(f"{house_prim_path}/{self.scene_parameters[index].furniture_path}")
         room_struct_prim = self.stage.GetPrimAtPath(f"{house_prim_path}/{self.scene_parameters[index].wall_path}")
           
-        house_prim = XFormPrim(house_prim_path, scale=(0.01, 0.01, 0.01))
-        house_prim.set_local_pose(np.array([0,0,0]) )
+        house_prim = XFormPrim(house_prim_path, scales=[[0.01, 0.01, 0.01]])
+        # house_prim.set_local_pose(np.array([0,0,0]) )
         
         # print(euler_angles_to_quat(np.array([np.pi/2, 0, 0])) )
         # house_prim.set_local_pose(np.array([0,0,0]) )
@@ -449,7 +450,7 @@ class BaseTask(ABC):
             self.camera_paths.append(camera_path)
 
     def _wait_for_loading(self):
-        sim = SimulationContext.instance()
+        sim = sim_utils.SimulationContext.instance()
         sim.render()
         while is_stage_loading():
             sim.render()

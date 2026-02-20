@@ -14,5 +14,9 @@ dev = [
     "ipython>=8.0",
 ]
 
+[build-system]
+requires = ["setuptools", "cython", "numpy"]
+build-backend = "setuptools.build_meta"
+
 [tool.setuptools.packages.find]
-include = ["renewed_tasks*", "renewed_utils*", "environment*"]
+include = ["renewed_tasks*", "renewed_utils*", "environment*", "local_utils*"]
