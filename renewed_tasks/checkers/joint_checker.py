@@ -1,16 +1,17 @@
 import math
 import omni
 from isaacsim.core.prims import XFormPrim
-from isaacsim.dynamic_control import _dynamic_control
+# from isaacsim.dynamic_control import _dynamic_control
 from .base_checker import BaseChecker
 from environment.parameters import CheckerParameters
 import omni.physics.tensors.impl.api as physx
-from isaacsim.core.simulation_context import SimulationContext
+
+import isaaclab.sim as sim_utils
 
 class JointCheck():
     def __init__(self, joint_prim, joint_name) -> None:
         self.joint_name = joint_name
-        self.stage = omni.usd.get_context().get_stage()
+        self.stage = sim_utils.get_current_stage()
 
         self.prim_list = list(self.stage.TraverseAll())
         # print("self.prim_list: ", self.prim_list)
@@ -44,28 +45,30 @@ class JointCheck():
         return self.joint.GetAttribute("physics:lowerLimit").Get()
         
     def compute_percentage(self):
+        #FIXME: get the joint percentage and check
+        return 0
 
-        self.dc = _dynamic_control.acquire_dynamic_control_interface()
-        self.art = self.dc.get_articulation(self.full_name)
+        # self.dc = _dynamic_control.acquire_dynamic_control_interface()
+        # self.art = self.dc.get_articulation(self.full_name)
 
-        dof_ptr = self.dc.find_articulation_dof(self.art, self.joint_name)
-        dof_pos = self.dc.get_dof_position(dof_ptr)
+        # dof_ptr = self.dc.find_articulation_dof(self.art, self.joint_name)
+        # dof_pos = self.dc.get_dof_position(dof_ptr)
         
-        if self.type == 'PhysicsPrismaticJoint':
-            tmp = dof_pos
-        else:
-            tmp = math.degrees(dof_pos)
+        # if self.type == 'PhysicsPrismaticJoint':
+        #     tmp = dof_pos
+        # else:
+        #     tmp = math.degrees(dof_pos)
             
-        pertentage = (tmp - self.lower)/(self.upper - self.lower) * 100
+        # pertentage = (tmp - self.lower)/(self.upper - self.lower) * 100
 
-        # print("upper lower percentage", tmp, self.upper, self.lower, pertentage)
+        # # print("upper lower percentage", tmp, self.upper, self.lower, pertentage)
 
-        if pertentage > 100:
-            pertentage = 100
-        elif pertentage < 0:
-            pertentage = 0
+        # if pertentage > 100:
+        #     pertentage = 100
+        # elif pertentage < 0:
+        #     pertentage = 0
 
-        return pertentage 
+        # return pertentage 
     
     def compute_distance(self):
         return abs(self.compute_percentage() - self.initial_percentage)

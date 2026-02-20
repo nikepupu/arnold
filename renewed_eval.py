@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 
 def main():
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    device = 'cpu'# FIXME: fr debug 'cuda' if torch.cuda.is_available() else 'cpu'
     render = args_cli.visualize
 
     sim_cfg = SimulationCfg(dt=0.05, device=device)
@@ -119,6 +119,11 @@ def main():
         robot_base=robot_base, gt_actions=gt_actions)
 
     import ipdb; ipdb.set_trace()
+
+    # Simulate
+    while simulation_app.is_running():
+        # perform step
+        sim_context.step()
 
     
 

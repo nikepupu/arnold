@@ -37,7 +37,7 @@ def load_task(npz):
     """
     Load a task from a numpy file.
     """
-    from .checkers import BaseChecker, PickupChecker
+    from .checkers import BaseChecker, PickupChecker, JointChecker
     info = npz['info'].item()
 
     scene_parameters = [SceneParameters(**info['scene_parameters'])]

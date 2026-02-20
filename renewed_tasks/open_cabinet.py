@@ -41,8 +41,6 @@ class OpenCabinet(BaseTask):
         self.stage = sim_utils.get_current_stage()
         self.checker = None
 
-        import ipdb; ipdb.set_trace()
-
         self.robot_base = robot_base
 
         obs = super().reset(
@@ -57,7 +55,7 @@ class OpenCabinet(BaseTask):
         self.is_success = 0
         self.gt_actions = gt_actions
 
-        import ipdb; ipdb.set_trace()
+        # import ipdb; ipdb.set_trace()
 
         return obs
 
@@ -75,6 +73,7 @@ class OpenCabinet(BaseTask):
             initial_name = f"/World_{index}/{param.object_type}",
             is_unique_fn = lambda x: not is_prim_path_valid(x)
         )
+        import ipdb; ipdb.set_trace()
         object_prim = add_reference_to_stage(param.usd_path, object_prim_path)
 
         self._wait_for_loading()
@@ -84,7 +83,7 @@ class OpenCabinet(BaseTask):
         positions = torch.tensor(np.array(param.object_position)/100.0).unsqueeze(0)
         rotations = torch.tensor(param.orientation_quat).unsqueeze(0)
         scales = torch.tensor(np.array(param.scale)/100.0).unsqueeze(0)
-        
+
         # use this to set relative position, orientation and scale
         xform_prim = XFormPrim(object_prim_path, positions= positions, orientations = rotations, scales = scales)
         self._wait_for_loading()

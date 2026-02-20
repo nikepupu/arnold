@@ -113,9 +113,9 @@ class BaseTask(ABC):
         self._wait_for_loading()
         self._define_stage_properties()
 
-        if self.use_gpu_physics:
-            simulation_context.get_physics_context().enable_gpu_dynamics(self.use_gpu_physics)
-            simulation_context.get_physics_context().set_broadphase_type("GPU")
+        # if self.use_gpu_physics:
+        #     simulation_context.get_physics_context().enable_gpu_dynamics(self.use_gpu_physics)
+        #     simulation_context.get_physics_context().set_broadphase_type("GPU")
         
         self._load_scene()
         self.robot = self._load_robot()
@@ -154,7 +154,7 @@ class BaseTask(ABC):
         self.time_step = 0
         ########## setup controller
         self.gripper_controller = self.robot.gripper
-        self.c_controller = RMPFlowController(name="cspace_controller", robot_articulation=self.robot, physics_dt=1/120.0)
+        self.c_controller = RMPFlowController(name="cspace_controller", robot_articulation=self.robot, physics_dt=1/20)
 
         if self.record:
             self.register_recorder()
@@ -257,7 +257,7 @@ class BaseTask(ABC):
         house_prim_path = f"/World_{index}/house"
         # print("house usd path: ", self.scene_parameters[index].usd_path)
         # while True:
-        
+        self.scene_parameters[index].usd_path = self.scene_parameters[index].usd_path.replace("/VRKitchen2.0", "")
         house_prim = add_reference_to_stage(self.scene_parameters[index].usd_path, house_prim_path)
         self._wait_for_loading()
         furniture_prim = self.stage.GetPrimAtPath(f"{house_prim_path}/{self.scene_parameters[index].furniture_path}")
