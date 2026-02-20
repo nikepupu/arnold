@@ -31,6 +31,12 @@ ${ISAACLAB_PATH}/isaaclab.sh -p scripts/verify_rsl_rl.py
 ```
 
 
+## 2. Command
+```sh
+python renewed_eval.py --task=pickup_object --mode=eval --use_gt 1 1 --visualize
+```
+
+
 <h2 align="center">
   <b><tt>ARNOLD</tt>: A Benchmark for Language-Grounded Task Learning With Continuous States in Realistic 3D Scenes</b>
 </h2>

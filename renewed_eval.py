@@ -6,8 +6,10 @@ import os
 import logging
 
 from renewed_utils.data import load_data
+from renewed_tasks import load_task
 
 from isaaclab.app import AppLauncher
+
 
 # create argparser
 parser = argparse.ArgumentParser(description="Eval or Replay")
@@ -104,7 +106,7 @@ def main():
     if use_gt[1]:
         assert gt_actions[2] is not None, "Use second gt action but it is missing"
 
-    # env, object_parameters, robot_parameters, scene_parameters = load_task(cfg.asset_root, npz=anno, cfg=cfg)
+    env, object_parameters, robot_parameters, scene_parameters = load_task(npz=anno)
 
     import ipdb; ipdb.set_trace()
     

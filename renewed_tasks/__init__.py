@@ -1,0 +1,189 @@
+ASSET_ROOT = "/home/linfan/Projects/arnold/asset"
+
+import os
+
+from environment.parameters import SceneParameters, ObjectParameters, StageProperties, \
+    ObjectPhysicsProperties, RobotParameters, CheckerParameters, FluidPhysicsProperties
+
+
+def handle_part_predicate(prim_path: str):
+    prim = get_prim_at_path(prim_path)
+    if "handle" in prim.GetPath().pathString and prim.GetTypeName() == "Mesh":
+        return True
+                            
+    return False
+
+
+def joint_part_predicate(prim_path:str):
+    prim = get_prim_at_path(prim_path)
+    if "joint" in prim.GetPath().pathString and \
+        (prim.GetTypeName() == "PhysicsPrismaticJoint" or prim.GetTypeName() == "PhysicsRevoluteJoint"):
+        return True
+                            
+    return False
+
+
+def cup_shape_predicate(prim_path: str):
+    prim = get_prim_at_path(prim_path)
+    if "cupShape" in prim.GetPath().pathString and prim.GetTypeName() == "Mesh":
+        return True
+                            
+    return False
+
+def load_task(npz):
+    """
+    Load a task from a numpy file.
+    """
+    from .checkers import BaseChecker, PickupChecker
+    info = npz['info'].item()
+
+    scene_parameters = [SceneParameters(**info['scene_parameters'])]
+    scene_parameters[0].usd_path = os.path.abspath(scene_parameters[0].usd_path).split(os.path.sep)
+    path_idx = scene_parameters[0].usd_path.index('VRKitchen2.0')
+    scene_parameters[0].usd_path = os.path.join(ASSET_ROOT, os.path.sep.join(scene_parameters[0].usd_path[path_idx:]))
+
+    floor_material_url = scene_parameters[0].floor_material_url
+    if 'omniverse' in floor_material_url:
+        floor_material_url = floor_material_url.split(os.path.sep)
+        
+        path_idx = floor_material_url.index('Base')
+        path_idx += 1
+
+        scene_parameters[0].floor_material_url = os.path.join(
+            ASSET_ROOT, 'materials', os.path.sep.join(floor_material_url[path_idx:])
+        )
+
+    elif 'wasabi' in floor_material_url:
+        floor_material_url = floor_material_url.split(os.path.sep)
+        path_idx = floor_material_url.index('materials')
+        scene_parameters[0].floor_material_url = os.path.join(
+            ASSET_ROOT, os.path.sep.join(floor_material_url[path_idx:])
+        )
+        
+    else:
+        floor_material_url = floor_material_url.split(os.path.sep)
+        path_idx = floor_material_url.index('VRKitchen2.0')
+        path_idx += 1
+
+        scene_parameters[0].floor_material_url = os.path.join(
+            ASSET_ROOT, os.path.sep.join(floor_material_url[path_idx:])
+        )
+
+    wall_material_url = scene_parameters[0].wall_material_url
+    if 'omniverse' in wall_material_url:
+        wall_material_url = wall_material_url.split(os.path.sep)
+        path_idx = wall_material_url.index('Base')
+        path_idx += 1
+
+        scene_parameters[0].wall_material_url = os.path.join(
+            ASSET_ROOT, 'materials', os.path.sep.join(wall_material_url[path_idx:])
+        )
+    
+    elif 'wasabi' in wall_material_url:
+        wall_material_url = wall_material_url.split(os.path.sep)
+        path_idx = wall_material_url.index('materials')
+        scene_parameters[0].wall_material_url = os.path.join(
+            ASSET_ROOT, os.path.sep.join(wall_material_url[path_idx:])
+        )
+    
+    else:
+        wall_material_url = wall_material_url.split(os.path.sep)
+        path_idx = wall_material_url.index('VRKitchen2.0')
+        path_idx += 1
+
+        scene_parameters[0].wall_material_url = os.path.join(
+            ASSET_ROOT, os.path.sep.join(wall_material_url[path_idx:])
+        )
+
+    robot_parameters = [RobotParameters(**info['robot_parameters'])]
+    robot_parameters[0].usd_path = os.path.abspath(robot_parameters[0].usd_path).split(os.path.sep)
+    path_idx = robot_parameters[0].usd_path.index('VRKitchen2.0')
+    path_idx += 1
+    robot_parameters[0].usd_path = os.path.join(
+        ASSET_ROOT, os.path.sep.join(robot_parameters[0].usd_path[path_idx:])
+    )
+
+    objects_parameters = [[]]
+    for i in range(len(info['objects_parameters'])):
+        object_parameters = {
+            'usd_path': info['objects_parameters'][i]['usd_path'],
+            'scale': info['objects_parameters'][i]['scale'],
+            'object_position': info['objects_parameters'][i]['object_position'],
+            'orientation_quat': info['objects_parameters'][i]['orientation_quat'],
+            'object_type': info['objects_parameters'][i]['object_type'],
+            'args': info['objects_parameters'][i]['args']
+        }
+
+        if info['objects_parameters'][i]['object_physics_properties'] is not None:
+            object_parameters.update({
+                'object_physics_properties': ObjectPhysicsProperties(**info['objects_parameters'][i]['object_physics_properties'])
+            })
+        else:
+            object_parameters.update({
+                'object_physics_properties': None
+            })
+        
+        if info['objects_parameters'][i]['part_physics_properties'] is not None:
+            object_parameters['part_physics_properties'] = {}
+            for k, v in info['objects_parameters'][i]['part_physics_properties'].items():
+                object_parameters['part_physics_properties'][k] = ObjectPhysicsProperties(**v)
+                if k == 'handle':
+                    object_parameters['part_physics_properties'][k].properties["predicate"] = handle_part_predicate
+                elif k == 'joint':
+                    object_parameters['part_physics_properties'][k].properties["predicate"] = joint_part_predicate
+                elif k == 'cup_shape':
+                    object_parameters['part_physics_properties'][k].properties["predicate"] = cup_shape_predicate
+        else:
+            object_parameters.update({
+                'part_physics_properties': None
+            })
+        
+        if info['objects_parameters'][i]['fluid_properties'] is not None:
+            object_parameters.update({
+                'fluid_properties': FluidPhysicsProperties(**info['objects_parameters'][i]['fluid_properties'])
+            })
+        else:
+            object_parameters.update({
+                'fluid_properties': None
+            })
+        
+        if info['objects_parameters'][i]['object_timeline_management'] is not None:
+            checker_parameters = CheckerParameters(**info['objects_parameters'][i]['object_timeline_management'])
+            if 'pickup' in object_parameters['args']['task_type']:
+                object_parameters.update({
+                    'object_timeline_management': PickupChecker(checker_parameters=checker_parameters)
+                })
+            # elif 'reorient' in object_parameters['args']['task_type']:
+            #     object_parameters.update({
+            #         'object_timeline_management': OrientChecker(checker_parameters=checker_parameters)
+            #     })
+            # elif 'water' in object_parameters['args']['task_type']:
+            #     object_parameters.update({
+            #         'object_timeline_management': WaterChecker(checker_parameters=checker_parameters)
+            #     })
+            # else:
+            #     object_parameters.update({
+            #         'object_timeline_management': JointChecker(checker_parameters=checker_parameters)
+            #     })
+        else:
+            object_parameters.update({
+                'object_timeline_management': None
+            })
+
+        objects_parameters[0].append(ObjectParameters(**object_parameters))
+        objects_parameters[0][i].usd_path = os.path.abspath(objects_parameters[0][i].usd_path).split(os.path.sep)
+        path_idx = objects_parameters[0][i].usd_path.index('VRKitchen2.0')
+        path_idx += 1
+        objects_parameters[0][i].usd_path = os.path.join(
+            ASSET_ROOT, os.path.sep.join(objects_parameters[0][i].usd_path[path_idx:])
+        )
+
+    robot_shift = info['robot_shift']
+    light_usd_path = os.path.join(ASSET_ROOT, 'sample/light/skylight.usd')
+    stage_properties = StageProperties(light_usd_path, "y", 0.01, gravity_direction=[0,-1,0], gravity_magnitude=981)
+
+    import ipdb; ipdb.set_trace()
+
+    task_name = object_parameters['args']['task_type']
+
+    
