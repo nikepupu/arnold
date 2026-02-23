@@ -4,6 +4,8 @@ import torch
 import numpy as np
 import os
 import logging
+import yaml
+from scipy.spatial.transform import Rotation as R
 
 from renewed_utils.data import load_data
 from renewed_tasks import load_task
@@ -16,6 +18,8 @@ parser.add_argument("--task", type=str, default=None, help="Name of the task.")
 parser.add_argument("--mode", type=str, default="eval", help="eval or replay")
 parser.add_argument("--visualize", action="store_true", default=False, help="Visualize the simulation.")
 parser.add_argument("--use_gt", type=int, nargs=2, default=[1, 1], help="Use ground truth for action inputs.")
+parser.add_argument("--record", action="store_true", default=False, help="Record trajectories.")
+parser.add_argument("--cfg_path", type=str, default="./configs/default.yaml", help="Path to the config file.")
 
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
@@ -31,6 +35,10 @@ logger = logging.getLogger(__name__)
 
 
 def main():
+    # load config
+    with open(os.path.join(args_cli.cfg_path), 'r') as f:
+        cfg = yaml.safe_load(f)
+
     device = 'cpu'# FIXME: fr debug 'cuda' if torch.cuda.is_available() else 'cpu'
     render = args_cli.visualize
 
@@ -113,12 +121,45 @@ def main():
 
     env, object_parameters, robot_parameters, scene_parameters = load_task(npz=anno)
 
-    import ipdb; ipdb.set_trace()
-
     obs = env.reset(robot_parameters, scene_parameters, object_parameters, 
         robot_base=robot_base, gt_actions=gt_actions)
 
+    logger.info(f'Instruction: {gt_frames[0]["instruction"]}')
+    logger.info('Ground truth action:')
+    for gt_action, grip_open in zip(gt_actions, cfg['gripper_open'][task]):
+        if gt_action is None:
+            continue
+        act_pos, act_rot = gt_action
+        act_rot = R.from_quat(act_rot[[1,2,3,0]]).as_euler('XYZ', degrees=True)
+        logger.info(f'trans={act_pos}, orient(euler XYZ)={act_rot}, gripper_open={grip_open}')
+
+    # TODO: check recording
+    if args_cli.record:
+        env.recorder.start_record(
+            traj_dir=os.path.join(cfg.exp_dir, f'traj_{eval_setting}', os.path.split(fname)[-1]),
+            checker=env.checker,
+        )
+
     import ipdb; ipdb.set_trace()
+
+
+    for i in range(2):
+        if use_gt[i]:
+            obs, suc = env.step(act_pos=None, act_rot=None, render=render, use_gt=True)
+        else:
+            act_pos, act_rot = get_action(
+                gt=obs, agent=agent, franka=env.robot, c_controller=env.c_controller, npz_file=anno, offset=offset, timestep=i,
+                device=device, agent_type=cfg.model, obs_type=cfg.obs_type, lang_embed_cache=lang_embed_cache
+            )
+
+            logger.info(
+                f"Prediction action {i}: trans={act_pos}, orient(euler XYZ)={R.from_quat(act_rot[[1,2,3,0]]).as_euler('XYZ', degrees=True)}"
+            )
+
+            obs, suc = env.step(act_pos=act_pos, act_rot=act_rot, render=render, use_gt=False)
+
+        if suc == -1:
+            break
 
     # Simulate
     while simulation_app.is_running():

@@ -5,7 +5,7 @@ from isaacsim.core.utils.string import find_unique_string_name
 from isaacsim.core.utils.stage import add_reference_to_stage
 from isaacsim.core.utils.prims import is_prim_path_valid,get_prim_at_path, get_all_matching_child_prims
 from isaacsim.core.utils.semantics import add_update_semantics
-
+from isaacsim.core.utils.types import ArticulationAction
 import omni
 import torch
 from isaacsim.core.prims import XFormPrim
@@ -55,8 +55,6 @@ class OpenCabinet(BaseTask):
         self.is_success = 0
         self.gt_actions = gt_actions
 
-        # import ipdb; ipdb.set_trace()
-
         return obs
 
     def set_up_task(self) -> None:
@@ -73,7 +71,7 @@ class OpenCabinet(BaseTask):
             initial_name = f"/World_{index}/{param.object_type}",
             is_unique_fn = lambda x: not is_prim_path_valid(x)
         )
-        
+
         object_prim = add_reference_to_stage(param.usd_path, object_prim_path)
 
         self._wait_for_loading()
@@ -151,6 +149,7 @@ class OpenCabinet(BaseTask):
             )
             position_rotation_interp_iter = iter(position_rotation_interp_list)
 
+        import ipdb; ipdb.set_trace()
         while self.current_stage < self.end_stage:
             if self.time_step % 120 == 0:
                 self.logger.info(f"tick: {self.time_step}")
@@ -185,28 +184,28 @@ class OpenCabinet(BaseTask):
                         position_rotation_interp_list = None
                         self.current_stage += 1
                         continue
-
+            
             if position_reached( self.c_controller, current_target[0], self.robot, thres=(0.001 if self.current_stage == 1 else 0.005) ) \
-            and ( rotation_reached(self.c_controller, current_target[1]) ):
-                gripper_state = self.gripper_controller.get_joint_positions()
-                current_gripper_open = (gripper_state[0] + gripper_state[1] > 0.07)
+                and ( rotation_reached(self.c_controller, current_target[1]) ):
+                joint_positions = self.robot.get_joint_positions()
+                gripper_state = joint_positions[-2:]  # last two joints are finger joints
+                current_gripper_open = (float(gripper_state[0]) + float(gripper_state[1]) > 0.07)
 
                 if current_target[2] != current_gripper_open:
+                    num_dofs = self.robot.num_dof
+                    gripper_indices = [num_dofs - 2, num_dofs - 1]  # panda_finger_joint1, panda_finger_joint2
                     if current_target[2] < 0.5:
-                        target_joint_positions_gripper = self.gripper_controller.forward(action="close")
-                        for _ in range(self.gripper_trigger_period):
-                            articulation_controller = self.robot.get_articulation_controller()
-                            articulation_controller.apply_action(target_joint_positions_gripper)
-                            self.try_record(actions=target_joint_positions_gripper)
-                            simulation_context.step(render=render)
-
+                        gripper_positions = np.array([0.0, 0.0])  # close
                     else:
-                        target_joint_positions_gripper = self.gripper_controller.forward(action="open")
-                        for _ in range(self.gripper_trigger_period):
-                            articulation_controller = self.robot.get_articulation_controller()
-                            articulation_controller.apply_action(target_joint_positions_gripper)
-                            self.try_record(actions=target_joint_positions_gripper)
-                            simulation_context.step(render=render)
+                        gripper_positions = np.array([0.05, 0.05])  # open
+                    target_joint_positions_gripper = ArticulationAction(
+                        joint_positions=gripper_positions, joint_indices=gripper_indices
+                    )
+                    for _ in range(self.gripper_trigger_period):
+                        articulation_controller = self.robot.get_articulation_controller()
+                        articulation_controller.apply_action(target_joint_positions_gripper)
+                        self.try_record(actions=target_joint_positions_gripper)
+                        simulation_context.step(render=render)
 
                 current_target = None
                 if self.current_stage < 2:
@@ -224,6 +223,7 @@ class OpenCabinet(BaseTask):
             simulation_context.step(render=render)
             self.time_step += 1
 
+        import ipdb; ipdb.set_trace()
         if self.current_stage == self.num_stages:
             # stages exhausted, success check
             for _ in range(self.success_check_period):

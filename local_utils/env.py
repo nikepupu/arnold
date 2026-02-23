@@ -167,6 +167,7 @@ def position_reached(c_controller, target, robot, thres=1.5):
         return True
     
     ee_pos, R = c_controller.get_motion_policy().get_end_effector_as_prim().get_world_pose()
+    # ee_pos, R = robot.end_effector.get_world_pose()
     pos_diff = np.linalg.norm(ee_pos- target)
     # print(f'{pos_diff} = || {ee_pos} - {target} ||')
     if pos_diff < thres:

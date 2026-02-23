@@ -1,6 +1,7 @@
 import math
 import numpy as np
 import omni
+import torch
 from isaacsim.core.prims import XFormPrim
 # from isaacsim.dynamic_control import _dynamic_control
 from pxr import UsdPhysics, PhysxSchema
@@ -9,6 +10,7 @@ from environment.parameters import CheckerParameters
 import omni.physics.tensors.impl.api as physx
 
 import isaaclab.sim as sim_utils
+from isaacsim.core.prims import Articulation
 
 class JointCheck():
     def __init__(self, joint_prim, joint_name) -> None:
@@ -27,23 +29,33 @@ class JointCheck():
         self.full_name = self.prim.GetPath().pathString
         self.joint = self.stage.GetPrimAtPath(self.full_name)
 
-        # Determine the appropriate drive type name
-        self.drive_type = None
-        if self.prim.IsA(UsdPhysics.RevoluteJoint):
-            self.drive_type = "angular"
-        elif self.prim.IsA(UsdPhysics.PrismaticJoint):
-            self.drive_type = "linear"
+        # # Determine the appropriate drive type name
+        # self.drive_type = None
+        # if self.prim.IsA(UsdPhysics.RevoluteJoint):
+        #     self.drive_type = "angular"
+        # elif self.prim.IsA(UsdPhysics.PrismaticJoint):
+        #     self.drive_type = "linear"
 
-        # Get joint state api
-        if not self.prim.HasAPI(PhysxSchema.JointStateAPI, self.drive_type):
-            self.joint_state_api = PhysxSchema.JointStateAPI.Apply(self.prim, self.drive_type)
-        else:
-            self.joint_state_api = PhysxSchema.JointStateAPI.Get(self.prim, self.drive_type)
+        # # Get joint state api
+        # if not self.prim.HasAPI(PhysxSchema.JointStateAPI, self.drive_type):
+        #     self.joint_state_api = PhysxSchema.JointStateAPI.Apply(self.prim, self.drive_type)
+        # else:
+        #     self.joint_state_api = PhysxSchema.JointStateAPI.Get(self.prim, self.drive_type)
+
+        import ipdb; ipdb.set_trace()
+        self.parent = self.joint.GetRelationship("physics:body0").GetTargets()[0]
+        self.articulation = Articulation(prim_path= self.parent.pathString)
+
 
     def get_joint_position(self):
         body1 = str(self.joint.GetRelationship("physics:body1").GetTargets()[0])
+
+        pos, rot = XFormPrim(body1).get_world_poses()
         
-        return XFormPrim(body1).get_world_pose()[0]
+        # FIXME: correct numpy as tensor, if is a tensor, turn to numpy
+        if isinstance(pos, torch.Tensor):
+            pos = pos.cpu().numpy()
+        return pos[0] # only the first element
     
     def get_joint_link(self):
         body0 = self.joint.GetRelationship("physics:body0").GetTargets()[0]
@@ -71,20 +83,14 @@ class JointCheck():
     def compute_distance(self):
         return abs(self.compute_percentage() - self.initial_percentage)
 
-    def set_joint(self, percentage):
-        self.dc = _dynamic_control.acquire_dynamic_control_interface()
-        self.art = self.dc.get_articulation(self.full_name)
-        dof_ptr = self.dc.find_articulation_dof(self.art, self.joint_name)
-        
-        
-        tmp = percentage / 100.0 *(self.upper-self.lower) + self.lower
-        if self.type == 'PhysicsPrismaticJoint':
-            dof_pos = tmp
-        else:
-            dof_pos = math.radians(tmp)
+    def set_joint(self, percentage):        
+        joint_position = percentage / 100.0 *(self.upper-self.lower) + self.lower
+        # if self.type == 'PhysicsPrismaticJoint':
+        #     dof_pos = joint_position
+        # else:
+        #     dof_pos = math.radians(joint_position)
       
-        self.dc.wake_up_articulation(self.art)
-        self.dc.set_dof_position(dof_ptr, dof_pos)
+        self.joint_state_api.GetPositionAttr().Set(joint_position)
 
 
 class JointChecker(BaseChecker):
