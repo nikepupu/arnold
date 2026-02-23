@@ -1,7 +1,9 @@
 import math
+import numpy as np
 import omni
 from isaacsim.core.prims import XFormPrim
 # from isaacsim.dynamic_control import _dynamic_control
+from pxr import UsdPhysics, PhysxSchema
 from .base_checker import BaseChecker
 from environment.parameters import CheckerParameters
 import omni.physics.tensors.impl.api as physx
@@ -24,7 +26,19 @@ class JointCheck():
         self.type = self.prim.GetTypeName()
         self.full_name = self.prim.GetPath().pathString
         self.joint = self.stage.GetPrimAtPath(self.full_name)
-       
+
+        # Determine the appropriate drive type name
+        self.drive_type = None
+        if self.prim.IsA(UsdPhysics.RevoluteJoint):
+            self.drive_type = "angular"
+        elif self.prim.IsA(UsdPhysics.PrismaticJoint):
+            self.drive_type = "linear"
+
+        # Get joint state api
+        if not self.prim.HasAPI(PhysxSchema.JointStateAPI, self.drive_type):
+            self.joint_state_api = PhysxSchema.JointStateAPI.Apply(self.prim, self.drive_type)
+        else:
+            self.joint_state_api = PhysxSchema.JointStateAPI.Get(self.prim, self.drive_type)
 
     def get_joint_position(self):
         body1 = str(self.joint.GetRelationship("physics:body1").GetTargets()[0])
@@ -45,30 +59,14 @@ class JointCheck():
         return self.joint.GetAttribute("physics:lowerLimit").Get()
         
     def compute_percentage(self):
-        #FIXME: get the joint percentage and check
-        return 0
-
-        # self.dc = _dynamic_control.acquire_dynamic_control_interface()
-        # self.art = self.dc.get_articulation(self.full_name)
-
-        # dof_ptr = self.dc.find_articulation_dof(self.art, self.joint_name)
-        # dof_pos = self.dc.get_dof_position(dof_ptr)
-        
-        # if self.type == 'PhysicsPrismaticJoint':
-        #     tmp = dof_pos
-        # else:
-        #     tmp = math.degrees(dof_pos)
-            
-        # pertentage = (tmp - self.lower)/(self.upper - self.lower) * 100
+        #get the joint percentage and check
+        joint_postion = self.joint_state_api.GetPositionAttr().Get()
+        percentage = (joint_postion - self.lower)/(self.upper - self.lower) * 100
 
         # # print("upper lower percentage", tmp, self.upper, self.lower, pertentage)
+        percentage = np.clip(percentage, 0, 100)
 
-        # if pertentage > 100:
-        #     pertentage = 100
-        # elif pertentage < 0:
-        #     pertentage = 0
-
-        # return pertentage 
+        return percentage 
     
     def compute_distance(self):
         return abs(self.compute_percentage() - self.initial_percentage)

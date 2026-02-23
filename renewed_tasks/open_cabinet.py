@@ -73,7 +73,7 @@ class OpenCabinet(BaseTask):
             initial_name = f"/World_{index}/{param.object_type}",
             is_unique_fn = lambda x: not is_prim_path_valid(x)
         )
-        import ipdb; ipdb.set_trace()
+        
         object_prim = add_reference_to_stage(param.usd_path, object_prim_path)
 
         self._wait_for_loading()
