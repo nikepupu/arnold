@@ -51,7 +51,8 @@ class BaseTask(ABC):
         self.num_stages = num_stages
         self.horizon = horizon
         self.stage_properties: StageProperties = stage_properties
-        self.timeline = omni.timeline.get_timeline_interface()
+        self.simulation_context = sim_utils.SimulationContext.instance()
+        # self.timeline = omni.timeline.get_timeline_interface()
         self.kit = omni.kit.app.get_app()
 
         self.objects_list = []
@@ -76,15 +77,22 @@ class BaseTask(ABC):
         if is_prim_path_valid('/lula'):
             delete_prim('/lula')
         self.objects_list = []
-        self._wait_for_loading()
+        # self._wait_for_loading()
 
     def stop(self):
         if self.recorder is not None and self.recorder.record:
             self.recorder.save_buffer(self.success())
             self.recorder = None
-        self.timeline.stop()
+        
+        if hasattr(self, "checker") and self.checker:
+            self.checker.reset()
+            self.checker = None
+            
         self._wait_for_loading()
-        self.remove_objects()
+        self.simulation_context.pause()
+        sim_utils.clear_stage()
+        # self.remove_objects()
+        
 
     def reset(self,
               robot_parameters = None,
@@ -93,15 +101,13 @@ class BaseTask(ABC):
               sensor_types = ["rgb", "depthLinear", "camera", "semanticSegmentation"],
         ):
 
-        self.timeline.stop()
+        self.simulation_context.pause()
         self.checker = None
         self.kit.update()
 
         self.stage = sim_utils.get_current_stage()
         self.sensor_resolution = sensor_resolution
         self.sensor_types = sensor_types
-        
-        simulation_context = sim_utils.SimulationContext.instance()
 
         if robot_parameters is not None:
             self.robot_parameters = robot_parameters
@@ -123,7 +129,7 @@ class BaseTask(ABC):
         self.set_up_task()
         self._wait_for_loading()
         
-        self.timeline.play()
+        self.simulation_context.play()
 
         self.kit.update()
 
@@ -141,18 +147,18 @@ class BaseTask(ABC):
         initialize(self.robot)
 
         ########## let physics settle
-        if simulation_context is not None:
+        if self.simulation_context is not None:
             for _ in range(60):
-                simulation_context.step(render=False)
+                self.simulation_context.step(render=False)
      
             self.checker.initialization_step()
 
         # import ipdb; ipdb.set_trace()
 
         # settle checker (we use checker to initialze articulation body states)
-        if simulation_context is not None:
+        if self.simulation_context is not None:
             for _ in range(10):
-                simulation_context.step(render=False)
+                self.simulation_context.step(render=False)
         
         self.time_step = 0
         ########## setup controller
@@ -164,7 +170,7 @@ class BaseTask(ABC):
 
         # render=True for valid rendering results
         for _ in range(100):
-            simulation_context.step(render=True)
+            self.simulation_context.step(render=True)
 
         return self.render()
 

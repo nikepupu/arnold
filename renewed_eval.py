@@ -42,8 +42,8 @@ def main():
     device = 'cpu'# FIXME: fr debug 'cuda' if torch.cuda.is_available() else 'cpu'
     render = args_cli.visualize
 
-    sim_cfg = SimulationCfg(dt=0.05, device=device)
-    sim_context = SimulationContext(sim_cfg)
+    sim_cfg = SimulationCfg(dt=0.01, device=device)
+    simulation_context = SimulationContext(sim_cfg)
 
 
     #TODO: enable water tasks
@@ -157,7 +157,9 @@ def main():
 
         if suc == -1:
             break
-
+    
+    import ipdb; ipdb.set_trace()
+    
     env.stop()
     if suc == 1:
         correct += 1

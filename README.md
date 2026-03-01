@@ -37,7 +37,7 @@ python renewed_eval.py --task=pickup_object --mode=eval --use_gt 1 1 --visualize
 ```python
 import isaaclab.sim as sim_utils
 simulation_context = sim_utils.SimulationContext.instance()
-for _ in range(50):
+for _ in range(200):
     print("step", _)
     simulation_context.step(render=True)
 ```

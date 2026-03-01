@@ -54,7 +54,7 @@ class BaseChecker():
         """
         set up timeline event
         """
-        if e.type == int(omni.timeline.TimelineEventType.STOP):
+        if e.type == int(omni.timeline.TimelineEventType.STOP) or e.type == int(omni.timeline.TimelineEventType.PAUSE):
             self.it = 0
             self.time = 0
             self.reset()
