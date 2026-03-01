@@ -149,7 +149,7 @@ class OpenCabinet(BaseTask):
             )
             position_rotation_interp_iter = iter(position_rotation_interp_list)
 
-        import ipdb; ipdb.set_trace()
+        # import ipdb; ipdb.set_trace()
         while self.current_stage < self.end_stage:
             if self.time_step % 120 == 0:
                 self.logger.info(f"tick: {self.time_step}")
@@ -223,7 +223,7 @@ class OpenCabinet(BaseTask):
             simulation_context.step(render=render)
             self.time_step += 1
 
-        import ipdb; ipdb.set_trace()
+        # import ipdb; ipdb.set_trace()
         if self.current_stage == self.num_stages:
             # stages exhausted, success check
             for _ in range(self.success_check_period):

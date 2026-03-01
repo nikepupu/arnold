@@ -27,7 +27,8 @@ from isaacsim.sensors.camera import Camera
 import pxr
 from pxr import UsdPhysics, Gf, PhysxSchema, UsdShade
 from abc import ABC
-from isaacsim.robot.manipulators.examples.franka.controllers.rmpflow_controller import RMPFlowController
+# from isaacsim.robot.manipulators.examples.franka.controllers.rmpflow_controller import RMPFlowController
+from renewed_utils.controller import RMPFlowController
 
 from typing import List, Optional
 

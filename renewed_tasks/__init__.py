@@ -191,6 +191,9 @@ def load_task(npz):
     if object_parameters['args']['task_type'] == 'pickup_object':
         pass
         # env = PickupObject(cfg.num_stages[task_name], cfg.horizon, stage_properties=stage_properties, cfg=cfg)
+    elif object_parameters['args']['task_type'] == 'open_cabinet':
+        from .open_cabinet import OpenCabinet
+        env = OpenCabinet(3, 2400, stage_properties=stage_properties, record=False)
     elif object_parameters['args']['task_type'] == 'close_cabinet':
         from .close_cabinet import CloseCabinet
         env = CloseCabinet(3, 2400, stage_properties=stage_properties, record=False)

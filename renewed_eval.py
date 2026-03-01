@@ -87,7 +87,7 @@ def main():
 
 
     # TODO: write a forloop, for debug
-    task = task_list[-1]
+    task = task_list[-2]
     eval_split = eval_splits[-1]
     logger.info(f'Evaluating {task} {eval_split}')
 
@@ -161,10 +161,20 @@ def main():
         if suc == -1:
             break
 
-    # Simulate
-    while simulation_app.is_running():
-        # perform step
-        sim_context.step()
+    env.stop()
+    if suc == 1:
+        correct += 1
+    else:
+        logger.info(f'{fname}: {suc}')
+    total += 1
+    log_str = f'correct: {correct} | total: {total} | remaining: {len(data)}'
+    logger.info(f'{log_str}\n')
+    stats[fname] = suc
+
+    # # Simulate
+    # while simulation_app.is_running():
+    #     # perform step
+    #     sim_context.step()
 
     
 
