@@ -146,6 +146,8 @@ class BaseTask(ABC):
      
             self.checker.initialization_step()
 
+        # import ipdb; ipdb.set_trace()
+
         # settle checker (we use checker to initialze articulation body states)
         if simulation_context is not None:
             for _ in range(10):

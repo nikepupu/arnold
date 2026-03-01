@@ -34,6 +34,14 @@ export ISAACLAB_PATH=/path/to/isaac_lab
 python renewed_eval.py --task=pickup_object --mode=eval --use_gt 1 1 --visualize
 ```
 
+```python
+import isaaclab.sim as sim_utils
+simulation_context = sim_utils.SimulationContext.instance()
+for _ in range(50):
+    print("step", _)
+    simulation_context.step(render=True)
+```
+
 
 <h2 align="center">
   <b><tt>ARNOLD</tt>: A Benchmark for Language-Grounded Task Learning With Continuous States in Realistic 3D Scenes</b>

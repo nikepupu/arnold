@@ -29,22 +29,25 @@ class JointCheck():
         self.full_name = self.prim.GetPath().pathString
         self.joint = self.stage.GetPrimAtPath(self.full_name)
 
-        # # Determine the appropriate drive type name
-        # self.drive_type = None
-        # if self.prim.IsA(UsdPhysics.RevoluteJoint):
-        #     self.drive_type = "angular"
-        # elif self.prim.IsA(UsdPhysics.PrismaticJoint):
-        #     self.drive_type = "linear"
+        # Determine the appropriate drive type name
+        self.drive_type = None
+        if self.prim.IsA(UsdPhysics.RevoluteJoint):
+            self.drive_type = "angular"
+        elif self.prim.IsA(UsdPhysics.PrismaticJoint):
+            self.drive_type = "linear"
 
-        # # Get joint state api
-        # if not self.prim.HasAPI(PhysxSchema.JointStateAPI, self.drive_type):
-        #     self.joint_state_api = PhysxSchema.JointStateAPI.Apply(self.prim, self.drive_type)
-        # else:
-        #     self.joint_state_api = PhysxSchema.JointStateAPI.Get(self.prim, self.drive_type)
+        # Get joint state api
+        if not self.prim.HasAPI(PhysxSchema.JointStateAPI, self.drive_type):
+            self.joint_state_api = PhysxSchema.JointStateAPI.Apply(self.prim, self.drive_type)
+        else:
+            self.joint_state_api = PhysxSchema.JointStateAPI.Get(self.prim, self.drive_type)
 
-        import ipdb; ipdb.set_trace()
-        self.parent = self.joint.GetRelationship("physics:body0").GetTargets()[0]
-        self.articulation = Articulation(prim_path= self.parent.pathString)
+        # import ipdb; ipdb.set_trace()
+        # self.parent = self.joint.GetRelationship("physics:body0").GetTargets()[0]
+        # root_api = UsdPhysics.ArticulationRootAPI.Apply(
+        #     self.stage.GetPrimAtPath(self.parent.pathString)
+        # )
+        self.articulation = Articulation(prim_paths_expr=joint_prim)
 
 
     def get_joint_position(self):
@@ -72,10 +75,18 @@ class JointCheck():
         
     def compute_percentage(self):
         #get the joint percentage and check
-        joint_postion = self.joint_state_api.GetPositionAttr().Get()
-        percentage = (joint_postion - self.lower)/(self.upper - self.lower) * 100
+        # joint_postion = self.joint_state_api.GetPositionAttr().Get()
+        joint_index = self.articulation.dof_names.index(self.joint_name)
+        joint_position = self.articulation.get_joint_positions(joint_indices=[joint_index])
+        
+        if isinstance(joint_position, torch.Tensor):
+            joint_position = joint_position.item()
+        
+        joint_position = 180 * joint_position / np.pi
 
-        # # print("upper lower percentage", tmp, self.upper, self.lower, pertentage)
+        percentage = (joint_position - self.lower)/(self.upper - self.lower) * 100
+
+        print("upper lower percentage", self.upper, self.lower, percentage)
         percentage = np.clip(percentage, 0, 100)
 
         return percentage 
@@ -116,7 +127,13 @@ class JointChecker(BaseChecker):
         self.previous_percentage = None
         self.vel = None
         self.check_freq = 1
-        
+
+    def initialization_step(self):
+        super().initialization_step()
+
+        if hasattr(self, "joint_checker") and hasattr(self.joint_checker, "articulation"):
+            self.joint_checker.articulation.initialize()
+            
     
     def check_joint_direction(self):
         """
