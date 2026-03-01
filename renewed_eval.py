@@ -87,7 +87,7 @@ def main():
 
 
     # TODO: write a forloop, for debug
-    task = task_list[-2]
+    task = task_list[-3]
     eval_split = eval_splits[-1]
     logger.info(f'Evaluating {task} {eval_split}')
 
@@ -140,9 +140,6 @@ def main():
             checker=env.checker,
         )
 
-    import ipdb; ipdb.set_trace()
-
-
     for i in range(2):
         if use_gt[i]:
             obs, suc = env.step(act_pos=None, act_rot=None, render=render, use_gt=True)
@@ -175,6 +172,8 @@ def main():
     # while simulation_app.is_running():
     #     # perform step
     #     sim_context.step()
+
+    simulation_app.close()
 
     
 

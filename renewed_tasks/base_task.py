@@ -454,7 +454,8 @@ class BaseTask(ABC):
 
     def _wait_for_loading(self):
         sim = sim_utils.SimulationContext.instance()
-        sim.render()
+        sim.step(render=True)
+        # sim.render()
         while is_stage_loading():
             sim.render()
 

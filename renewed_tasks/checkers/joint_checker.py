@@ -82,7 +82,8 @@ class JointCheck():
         if isinstance(joint_position, torch.Tensor):
             joint_position = joint_position.item()
         
-        joint_position = 180 * joint_position / np.pi
+        if self.drive_type == "angular":
+            joint_position = 180 * joint_position / np.pi
 
         percentage = (joint_position - self.lower)/(self.upper - self.lower) * 100
 

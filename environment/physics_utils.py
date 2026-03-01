@@ -93,4 +93,4 @@ def set_joint_properties(stage, prim, damping_cofficient):
         mobility_prim = prim.GetParent().GetParent()
         mobility_xform = UsdGeom.Xformable.Get(stage, mobility_prim.GetPath())
         scale_factor = mobility_xform.GetOrderedXformOps()[2].Get()[0]
-        joint.CreateUpperLimitAttr(upper_limit * scale_factor / 100 )
+        joint.CreateUpperLimitAttr(upper_limit * scale_factor)
