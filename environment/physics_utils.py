@@ -88,9 +88,9 @@ def set_joint_properties(stage, prim, damping_cofficient):
     
     # find linear joint upperlimit, this assumes that lower limit is 0
     joint = UsdPhysics.PrismaticJoint.Get(stage, prim.GetPath())	
-    if joint:
-        upper_limit = joint.GetUpperLimitAttr().Get() #GetAttribute("xformOp:translate").Get()
-        mobility_prim = prim.GetParent().GetParent()
-        mobility_xform = UsdGeom.Xformable.Get(stage, mobility_prim.GetPath())
-        scale_factor = mobility_xform.GetOrderedXformOps()[2].Get()[0]
-        joint.CreateUpperLimitAttr(upper_limit * scale_factor)
+    # if joint:
+    #     upper_limit = joint.GetUpperLimitAttr().Get() #GetAttribute("xformOp:translate").Get()
+    #     mobility_prim = prim.GetParent().GetParent()
+    #     mobility_xform = UsdGeom.Xformable.Get(stage, mobility_prim.GetPath())
+    #     scale_factor = mobility_xform.GetOrderedXformOps()[2].Get()[0]
+    #     joint.CreateUpperLimitAttr(upper_limit)

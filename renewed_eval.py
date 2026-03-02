@@ -87,7 +87,7 @@ def main():
 
 
     # TODO: write a forloop, for debug
-    task = task_list[-3]
+    task = task_list[-4]
     eval_split = eval_splits[-1]
     logger.info(f'Evaluating {task} {eval_split}')
 
