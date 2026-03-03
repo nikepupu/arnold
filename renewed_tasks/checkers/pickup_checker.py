@@ -1,10 +1,9 @@
 import omni
 import omni.usd
-
+from isaacsim.core.prims import RigidPrim
 from .base_checker import BaseChecker
 from environment.parameters import CheckerParameters
 
-import isaaclab.sim as sim_utils
 
 class PickupChecker(BaseChecker):
     def __init__(self, checker_parameters: CheckerParameters, tolerance = 0.05) -> None:
@@ -16,7 +15,7 @@ class PickupChecker(BaseChecker):
 
         self.target_prim_path =  target_prim_path
         self.target_delta_y = self.checker_parameters.target_state/100.0
-
+        self.targetRigid = RigidPrim(prim_paths_expr=self.target_prim_path)
         self.previous_pos = None
         self.vel = None
 
@@ -28,19 +27,19 @@ class PickupChecker(BaseChecker):
     
     def initialization_step(self):
         # get transform
-        mat = omni.usd.utils.get_world_transform_matrix(self.target_prim) 
-        self.target_prim_init_y = mat.ExtractTranslation()[1] # extract y axis
+        pos, rot = self.targetRigid.get_world_poses(usd=False)
+        self.target_prim_init_y = pos[0][1].item() # extract y axis
         self.is_init = True
         self.create_task_callback()
         
     def get_height(self):
-        mat = omni.usd.utils.get_world_transform_matrix(self.target_prim) 
-        target_prim_current_y = mat.ExtractTranslation()[1]
+        pos, rot = self.targetRigid.get_world_poses(usd=False)
+        target_prim_current_y = pos[0][1].item()
         return target_prim_current_y
 
     def get_diff(self):
-        mat = omni.usd.utils.get_world_transform_matrix(self.target_prim) 
-        target_prim_current_y = mat.ExtractTranslation()[1]
+        pos, rot = self.targetRigid.get_world_poses(usd=False)
+        target_prim_current_y = pos[0][1].item()
         need_delta_y = target_prim_current_y - (self.target_delta_y + self.target_prim_init_y)
 
         return need_delta_y
@@ -54,9 +53,9 @@ class PickupChecker(BaseChecker):
             # mat = omni.usd.utils.get_world_transform_matrix(self.target_prim) 
             # target_prim_current_y = mat.ExtractTranslation()[1]
             
-            pos, rot = sim_utils.resolve_prim_pose(self.target_prim)
-            print("pos, rot", pos, rot)
-            target_prim_current_y = pos[1]
+            pos, rot = self.targetRigid.get_world_poses(usd=False)
+            # print("pos, rot", pos, rot)
+            target_prim_current_y = pos[0][1].item()
             
             if self.previous_pos is not None:
                 self.vel  = abs(target_prim_current_y - self.previous_pos)

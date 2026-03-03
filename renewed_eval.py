@@ -45,10 +45,6 @@ def main():
     sim_cfg = SimulationCfg(dt=0.05, device=device)
     simulation_context = SimulationContext(sim_cfg)
 
-    import isaacsim.core.utils.extensions as extensions_utils
-    extensions_utils.disable_extension(extension_name="omni.physx.flatcache")
-
-
     #TODO: enable water tasks
     task_list = [
             'pickup_object', 'reorient_object', 'open_drawer', 'close_drawer',
