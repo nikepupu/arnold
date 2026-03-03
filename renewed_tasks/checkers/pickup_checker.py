@@ -1,9 +1,10 @@
 import omni
 import omni.usd
-from isaacsim.core.prims import XFormPrim
+
 from .base_checker import BaseChecker
 from environment.parameters import CheckerParameters
 
+import isaaclab.sim as sim_utils
 
 class PickupChecker(BaseChecker):
     def __init__(self, checker_parameters: CheckerParameters, tolerance = 0.05) -> None:
@@ -15,7 +16,7 @@ class PickupChecker(BaseChecker):
 
         self.target_prim_path =  target_prim_path
         self.target_delta_y = self.checker_parameters.target_state/100.0
-        self.targetRigid = XFormPrim(self.target_prim_path)
+
         self.previous_pos = None
         self.vel = None
 
@@ -50,19 +51,20 @@ class PickupChecker(BaseChecker):
         
         self.total_step += 1
         if self.total_step % self.check_freq == 0:
-            mat = omni.usd.utils.get_world_transform_matrix(self.target_prim) 
-            target_prim_current_y = mat.ExtractTranslation()[1]
+            # mat = omni.usd.utils.get_world_transform_matrix(self.target_prim) 
+            # target_prim_current_y = mat.ExtractTranslation()[1]
             
-            pos, rot = self.targetRigid.get_world_pose()
-            pos = pos[1]
+            pos, rot = sim_utils.resolve_prim_pose(self.target_prim)
+            print("pos, rot", pos, rot)
+            target_prim_current_y = pos[1]
             
             if self.previous_pos is not None:
-                self.vel  = abs(pos - self.previous_pos)
+                self.vel  = abs(target_prim_current_y - self.previous_pos)
             
             target_height = (self.target_delta_y + self.target_prim_init_y)
             need_delta_y = abs(target_prim_current_y - target_height)
             if self.total_step % self.print_every == 0:
-                print("target height %s current height %s" %(target_height, target_prim_current_y))
+                print(self.total_step, self.target_prim_path, "target height %s current height %s" %(target_height, target_prim_current_y))
 
             # success condition
             if  need_delta_y < self.tolerance and self.vel is not None and self.vel < 0.1 :
@@ -71,5 +73,5 @@ class PickupChecker(BaseChecker):
             else:
                 # self.success = False
                 self._on_not_success()
-            self.previous_pos = pos
+            self.previous_pos = target_prim_current_y
             super().start_checking()

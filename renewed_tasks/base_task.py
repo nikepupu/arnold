@@ -57,6 +57,9 @@ class BaseTask(ABC):
 
         self.objects_list = []
         self.recorder = None
+
+        self.gripper_trigger_period = 50
+        self.success_check_period = 300
     
     def success(self):
         if hasattr(self, "checker") and self.checker and self.checker.success:

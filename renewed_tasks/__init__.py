@@ -1,4 +1,4 @@
-ASSET_ROOT = "/home/linfan/Projects/arnold/asset"
+ASSET_ROOT = "/home/yizzhao/Projects/arnold/asset"
 
 import os
 import numpy as np
@@ -189,8 +189,8 @@ def load_task(npz):
 
     # TODO: Add more task types
     if object_parameters['args']['task_type'] == 'pickup_object':
-        pass
-        # env = PickupObject(cfg.num_stages[task_name], cfg.horizon, stage_properties=stage_properties, cfg=cfg)
+        from .pickup_object import PickupObject
+        env = PickupObject(3, 2400, stage_properties=stage_properties, record=False)
     elif object_parameters['args']['task_type'] == 'open_drawer':
         from .open_drawer import OpenDrawer
         env = OpenDrawer(3, 2400, stage_properties=stage_properties, record=False)

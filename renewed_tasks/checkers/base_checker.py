@@ -20,7 +20,7 @@ class BaseChecker():
        
         # log
         self.total_step = 0
-        self.print_every = 240
+        self.print_every = 2
         self.checking_interval = 15
         self.is_init = False
 

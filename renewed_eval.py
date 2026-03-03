@@ -42,8 +42,11 @@ def main():
     device = 'cpu'# FIXME: fr debug 'cuda' if torch.cuda.is_available() else 'cpu'
     render = args_cli.visualize
 
-    sim_cfg = SimulationCfg(dt=0.01, device=device)
+    sim_cfg = SimulationCfg(dt=0.05, device=device)
     simulation_context = SimulationContext(sim_cfg)
+
+    import isaacsim.core.utils.extensions as extensions_utils
+    extensions_utils.disable_extension(extension_name="omni.physx.flatcache")
 
 
     #TODO: enable water tasks
@@ -87,7 +90,7 @@ def main():
 
 
     # TODO: write a forloop, for debug
-    task = task_list[-4]
+    task = args_cli.task
     eval_split = eval_splits[-1]
     logger.info(f'Evaluating {task} {eval_split}')
 
