@@ -1,5 +1,33 @@
 # New Guide 2025 
 
+## 0. Download Dataset
+
+Download from [Google Drive](https://drive.google.com/drive/folders/1yaEItqU9_MdFVQmkKA6qSvfXy_cPnKGA).
+
+**Task data** (e.g. `pickup_object`, `reorient_object`, etc.): download and unzip each task folder into `./data/`.
+
+**Assets** (`sample` and `materials`): download and unzip into `./asset/`.
+
+After extraction, your directory structure should look like:
+
+```
+arnold/
+├── data/
+│   ├── pickup_object/
+│   │   ├── train/
+│   │   └── test/
+│   ├── reorient_object/
+│   ├── open_drawer/
+│   └── ...
+├── asset/
+│   ├── sample/
+│   │   └── light/
+│   │       └── skylight.usd
+│   └── materials/
+│       └── ...
+└── ...
+```
+
 ## 1. Installation
 
 ### Prerequisites
@@ -72,7 +100,7 @@ Ran Gong<sup>✶</sup>, Jiangyong Huang<sup>✶</sup>, Yizhou Zhao, Haoran Geng,
 </div>
 &nbsp;
 
-![teaser](assets/teaser.png)
+![teaser](images/teaser.png)
 
 **[News]** We host the [ARNOLD Challenge](https://sites.google.com/view/arnoldchallenge/) on [CVPR 2024 Embodied AI Workshop](https://embodied-ai.org/). Welcome to participate.
 
