@@ -1,4 +1,4 @@
-ASSET_ROOT = "/home/yizzhao/Projects/arnold/asset"
+
 
 import os
 import numpy as np
@@ -37,13 +37,13 @@ def load_task(npz):
     """
     Load a task from a numpy file.
     """
-    from .checkers import BaseChecker, PickupChecker, JointChecker
+    from .checkers import BaseChecker, PickupChecker, JointChecker, OrientChecker
     info = npz['info'].item()
 
     scene_parameters = [SceneParameters(**info['scene_parameters'])]
     scene_parameters[0].usd_path = os.path.abspath(scene_parameters[0].usd_path).split(os.path.sep)
     path_idx = scene_parameters[0].usd_path.index('VRKitchen2.0')
-    scene_parameters[0].usd_path = os.path.join(ASSET_ROOT, os.path.sep.join(scene_parameters[0].usd_path[path_idx:]))
+    scene_parameters[0].usd_path = os.path.join("./asset", os.path.sep.join(scene_parameters[0].usd_path[path_idx:]))
 
     floor_material_url = scene_parameters[0].floor_material_url
     if 'omniverse' in floor_material_url:
@@ -53,14 +53,14 @@ def load_task(npz):
         path_idx += 1
 
         scene_parameters[0].floor_material_url = os.path.join(
-            ASSET_ROOT, 'materials', os.path.sep.join(floor_material_url[path_idx:])
+            "./asset", 'materials', os.path.sep.join(floor_material_url[path_idx:])
         )
 
     elif 'wasabi' in floor_material_url:
         floor_material_url = floor_material_url.split(os.path.sep)
         path_idx = floor_material_url.index('materials')
         scene_parameters[0].floor_material_url = os.path.join(
-            ASSET_ROOT, os.path.sep.join(floor_material_url[path_idx:])
+            "./asset", os.path.sep.join(floor_material_url[path_idx:])
         )
         
     else:
@@ -69,7 +69,7 @@ def load_task(npz):
         path_idx += 1
 
         scene_parameters[0].floor_material_url = os.path.join(
-            ASSET_ROOT, os.path.sep.join(floor_material_url[path_idx:])
+            "./asset", os.path.sep.join(floor_material_url[path_idx:])
         )
 
     wall_material_url = scene_parameters[0].wall_material_url
@@ -79,14 +79,14 @@ def load_task(npz):
         path_idx += 1
 
         scene_parameters[0].wall_material_url = os.path.join(
-            ASSET_ROOT, 'materials', os.path.sep.join(wall_material_url[path_idx:])
+            "./asset", 'materials', os.path.sep.join(wall_material_url[path_idx:])
         )
     
     elif 'wasabi' in wall_material_url:
         wall_material_url = wall_material_url.split(os.path.sep)
         path_idx = wall_material_url.index('materials')
         scene_parameters[0].wall_material_url = os.path.join(
-            ASSET_ROOT, os.path.sep.join(wall_material_url[path_idx:])
+            "./asset", os.path.sep.join(wall_material_url[path_idx:])
         )
     
     else:
@@ -95,7 +95,7 @@ def load_task(npz):
         path_idx += 1
 
         scene_parameters[0].wall_material_url = os.path.join(
-            ASSET_ROOT, os.path.sep.join(wall_material_url[path_idx:])
+            "./asset", os.path.sep.join(wall_material_url[path_idx:])
         )
 
     robot_parameters = [RobotParameters(**info['robot_parameters'])]
@@ -103,7 +103,7 @@ def load_task(npz):
     path_idx = robot_parameters[0].usd_path.index('VRKitchen2.0')
     path_idx += 1
     robot_parameters[0].usd_path = os.path.join(
-        ASSET_ROOT, os.path.sep.join(robot_parameters[0].usd_path[path_idx:])
+        "./asset", os.path.sep.join(robot_parameters[0].usd_path[path_idx:])
     )
 
     objects_parameters = [[]]
@@ -156,10 +156,10 @@ def load_task(npz):
                 object_parameters.update({
                     'object_timeline_management': PickupChecker(checker_parameters=checker_parameters)
                 })
-            # elif 'reorient' in object_parameters['args']['task_type']:
-            #     object_parameters.update({
-            #         'object_timeline_management': OrientChecker(checker_parameters=checker_parameters)
-            #     })
+            elif 'reorient' in object_parameters['args']['task_type']:
+                object_parameters.update({
+                    'object_timeline_management': OrientChecker(checker_parameters=checker_parameters)
+                })
             # elif 'water' in object_parameters['args']['task_type']:
             #     object_parameters.update({
             #         'object_timeline_management': WaterChecker(checker_parameters=checker_parameters)
@@ -178,11 +178,11 @@ def load_task(npz):
         path_idx = objects_parameters[0][i].usd_path.index('VRKitchen2.0')
         path_idx += 1
         objects_parameters[0][i].usd_path = os.path.join(
-            ASSET_ROOT, os.path.sep.join(objects_parameters[0][i].usd_path[path_idx:])
+            "./asset", os.path.sep.join(objects_parameters[0][i].usd_path[path_idx:])
         )
 
     robot_shift = info['robot_shift']
-    light_usd_path = os.path.join(ASSET_ROOT, 'sample/light/skylight.usd')
+    light_usd_path = os.path.join("./asset", 'sample/light/skylight.usd')
     stage_properties = StageProperties(light_usd_path, "y", 0.01, gravity_direction=[0,-1,0], gravity_magnitude=981)
 
     task_name = object_parameters['args']['task_type']
@@ -191,6 +191,9 @@ def load_task(npz):
     if object_parameters['args']['task_type'] == 'pickup_object':
         from .pickup_object import PickupObject
         env = PickupObject(3, 2400, stage_properties=stage_properties, record=False)
+    elif object_parameters['args']['task_type'] == 'reorient_object':
+        from .reorient_object import ReorientObject
+        env = ReorientObject(3, 2400, stage_properties=stage_properties, record=False)
     elif object_parameters['args']['task_type'] == 'open_drawer':
         from .open_drawer import OpenDrawer
         env = OpenDrawer(3, 2400, stage_properties=stage_properties, record=False)
