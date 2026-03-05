@@ -87,14 +87,14 @@ class BaseTask(ABC):
             self.recorder.save_buffer(self.success())
             self.recorder = None
         
-        if hasattr(self, "checker") and self.checker:
-            self.checker.reset()
-            self.checker = None
+        # if hasattr(self, "checker") and self.checker:
+        #     self.checker.reset()
+        #     self.checker = None
             
-        self._wait_for_loading()
-        self.simulation_context.pause()
+        # # self._wait_for_loading()
+        # self.simulation_context.pause()
         sim_utils.clear_stage()
-        # self.remove_objects()
+        # # self.remove_objects()
         
 
     def reset(self,
@@ -104,8 +104,13 @@ class BaseTask(ABC):
               sensor_types = ["rgb", "depthLinear", "camera", "semanticSegmentation"],
         ):
 
-        self.simulation_context.pause()
-        self.checker = None
+        if self.simulation_context.is_playing():
+            self.simulation_context.pause()
+
+        if hasattr(self, "checker") and self.checker:
+            self.checker.reset()
+            self.checker = None
+        
         self.kit.update()
 
         self.stage = sim_utils.get_current_stage()
@@ -195,29 +200,29 @@ class BaseTask(ABC):
         if not scene:
             scene = UsdPhysics.Scene.Define(self.stage, physicsScenePath)
         
-        gravityDirection = self.stage_properties.gravity_direction
-        self._gravityDirection = Gf.Vec3f(gravityDirection[0], gravityDirection[1],  gravityDirection[2])
+            gravityDirection = self.stage_properties.gravity_direction
+            self._gravityDirection = Gf.Vec3f(gravityDirection[0], gravityDirection[1],  gravityDirection[2])
 
-        scene.CreateGravityDirectionAttr().Set(self._gravityDirection)
+            scene.CreateGravityDirectionAttr().Set(self._gravityDirection)
 
-        self._gravityMagnitude = 9.81
-        scene.CreateGravityMagnitudeAttr().Set(self._gravityMagnitude)
-        
-        physxSceneAPI = PhysxSchema.PhysxSceneAPI.Apply(scene.GetPrim())
-        physxSceneAPI.CreateEnableCCDAttr().Set(True)
-        physxSceneAPI.GetTimeStepsPerSecondAttr().Set(120)
-        physxSceneAPI.CreateEnableGPUDynamicsAttr().Set(self.use_gpu_physics )
-        physxSceneAPI.CreateEnableEnhancedDeterminismAttr().Set(True)
-        physxSceneAPI.CreateEnableStabilizationAttr().Set(True)
+            self._gravityMagnitude = 9.81
+            scene.CreateGravityMagnitudeAttr().Set(self._gravityMagnitude)
+            
+            physxSceneAPI = PhysxSchema.PhysxSceneAPI.Apply(scene.GetPrim())
+            physxSceneAPI.CreateEnableCCDAttr().Set(True)
+            physxSceneAPI.GetTimeStepsPerSecondAttr().Set(120)
+            physxSceneAPI.CreateEnableGPUDynamicsAttr().Set(self.use_gpu_physics )
+            physxSceneAPI.CreateEnableEnhancedDeterminismAttr().Set(True)
+            physxSceneAPI.CreateEnableStabilizationAttr().Set(True)
 
-        physxSceneAPI.GetGpuMaxRigidContactCountAttr().Set(524288)
-        physxSceneAPI.GetGpuMaxRigidPatchCountAttr().Set(81920)
-        physxSceneAPI.GetGpuFoundLostPairsCapacityAttr().Set(8192)
-        physxSceneAPI.GetGpuFoundLostAggregatePairsCapacityAttr().Set(262144)
-        physxSceneAPI.GetGpuTotalAggregatePairsCapacityAttr().Set(8192)
-        physxSceneAPI.GetGpuMaxSoftBodyContactsAttr().Set(1048576)
-        physxSceneAPI.GetGpuMaxParticleContactsAttr().Set(1048576)
-        # physxSceneAPI.GetGpuHeapCapacityAttr().Set(67108864)
+            physxSceneAPI.GetGpuMaxRigidContactCountAttr().Set(524288)
+            physxSceneAPI.GetGpuMaxRigidPatchCountAttr().Set(81920)
+            physxSceneAPI.GetGpuFoundLostPairsCapacityAttr().Set(8192)
+            physxSceneAPI.GetGpuFoundLostAggregatePairsCapacityAttr().Set(262144)
+            physxSceneAPI.GetGpuTotalAggregatePairsCapacityAttr().Set(8192)
+            physxSceneAPI.GetGpuMaxSoftBodyContactsAttr().Set(1048576)
+            physxSceneAPI.GetGpuMaxParticleContactsAttr().Set(1048576)
+            # physxSceneAPI.GetGpuHeapCapacityAttr().Set(67108864)
         
     def render(self):
         # if not self._sensor_initialized:
@@ -254,13 +259,15 @@ class BaseTask(ABC):
         return {'images': outputs}
 
     def clear(self):
-        from pxr import Sdf, Usd
         index = 0
+        # delete house
         house_prim_path = f"/World_{index}/house"
-        prim_path = Sdf.Path(house_prim_path)
-        prim: Usd.Prim = self.stage.GetPrimAtPath(prim_path)
-        if prim.IsValid():
-            delete_prim(house_prim_path)
+        sim_utils.delete_prim(house_prim_path)
+
+        # delete object
+        object_list_prim_paths = [prim.GetPath().pathString for prim in self.objects_list]
+        sim_utils.delete_prim(object_list_prim_paths)
+
         
         # delete_prim('/physicsScene')
     
@@ -462,11 +469,12 @@ class BaseTask(ABC):
             self.camera_paths.append(camera_path)
 
     def _wait_for_loading(self):
-        sim = sim_utils.SimulationContext.instance()
-        sim.step(render=True)
+        if self.simulation_context.is_playing():
+            self.simulation_context.step(render=True)
         # sim.render()
-        while is_stage_loading():
-            sim.render()
+        # while is_stage_loading():
+        else:
+            self.simulation_context.render()
 
     def register_recorder(self):
         index = 0

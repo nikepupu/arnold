@@ -52,6 +52,15 @@ def main():
         ]
 
     eval_splits = ['test', 'novel_object', 'novel_scene', 'novel_state', 'any_state']
+
+    # TODO: write a forloop, for debug
+    task = args_cli.task
+    eval_split = "test"
+    assert task in task_list, f"Task {task} not in {task_list}"
+    assert eval_split in eval_splits, f"Eval split {eval_split} not in {eval_splits}"
+    logger.info(f'Evaluating {task} {eval_split}')
+
+
     
     use_gt = args_cli.use_gt
 
@@ -85,10 +94,7 @@ def main():
         eval_log = {}
 
 
-    # TODO: write a forloop, for debug
-    task = args_cli.task
-    eval_split = eval_splits[-1]
-    logger.info(f'Evaluating {task} {eval_split}')
+
 
     data, fnames = load_data(data_path=os.path.join("./data", task, eval_split))
 

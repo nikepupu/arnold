@@ -45,14 +45,18 @@ git checkout v2.3.2
 For local development on your machine:
 
 ```
+uv pip install -e .
+
+
+## OR
 # Ensure ISAACLAB_PATH is set
-export ISAACLAB_PATH=/path/to/isaac_lab
+# export ISAACLAB_PATH=/path/to/isaac_lab
 ## e.g.
 ## export ISAACLAB_PATH=/home/yizzhao/Projects/IsaacLab 
 ## export ISAACLAB_PATH=/home/linfan/Projects/IsaacLab/IsaacLab
 
 # Install all dependencies and packages
-./scripts/setup/install_deps_local.sh
+# ./scripts/setup/install_deps_local.sh
 
 ```
 
@@ -66,8 +70,10 @@ python renewed_eval.py --task=pickup_object --mode=eval --use_gt 1 1 --visualize
 import isaaclab.sim as sim_utils
 simulation_context = sim_utils.SimulationContext.instance()
 for _ in range(200):
-    print("step", _)
-    simulation_context.step(render=True)
+    if simulation_context.is_playing():
+        simulation_context.step(render=True)
+    else:
+        simulation_context.render()
 ```
 
 
