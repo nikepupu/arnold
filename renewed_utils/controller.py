@@ -37,8 +37,8 @@ class RMPFlowController(mg.MotionPolicyController):
             self._default_position,
             self._default_orientation,
         ) = self._articulation_motion_policy._robot_articulation.get_world_pose()
-        self._default_position = self._default_position.cpu().numpy()
-        self._default_orientation = self._default_orientation.cpu().numpy()
+        # self._default_position = self._default_position.cpu().numpy()
+        # self._default_orientation = self._default_orientation.cpu().numpy()
         self._motion_policy.set_robot_base_pose(
             robot_position=self._default_position, robot_orientation=self._default_orientation
         )

@@ -6,9 +6,9 @@ import omni
 from isaacsim.core.utils.extensions import enable_extension
 enable_extension("isaacsim.robot.manipulators.examples")
 
-import isaaclab.sim as sim_utils
 import torch
 
+from isaacsim.core.api import SimulationContext
 from isaacsim.core.prims import XFormPrim
 from isaacsim.core.utils.prims import is_prim_path_valid, get_prim_at_path, delete_prim
 from isaacsim.robot.manipulators.examples.franka import Franka
@@ -39,6 +39,8 @@ from isaacsim.core.api.robots.robot import Robot
 from isaacsim.core.utils.prims import get_prim_at_path
 from isaacsim.core.utils.stage import add_reference_to_stage, get_stage_units
 from isaacsim.robot.manipulators.grippers.parallel_gripper import ParallelGripper
+import isaacsim.core.utils.stage as stage_utils
+from isaacsim.core.utils.prims import delete_prim
 # from isaacsim.nucleus import get_assets_root_path
 
 
@@ -51,8 +53,8 @@ class BaseTask(ABC):
         self.num_stages = num_stages
         self.horizon = horizon
         self.stage_properties: StageProperties = stage_properties
-        self.simulation_context = sim_utils.SimulationContext.instance()
-        # self.timeline = omni.timeline.get_timeline_interface()
+        self.simulation_context = SimulationContext.instance()
+        self.timeline = omni.timeline.get_timeline_interface()
         self.kit = omni.kit.app.get_app()
 
         self.objects_list = []
@@ -93,7 +95,7 @@ class BaseTask(ABC):
             
         # # self._wait_for_loading()
         # self.simulation_context.pause()
-        sim_utils.clear_stage()
+        # sim_utils.clear_stage()
         # # self.remove_objects()
         
 
@@ -104,8 +106,8 @@ class BaseTask(ABC):
               sensor_types = ["rgb", "depthLinear", "camera", "semanticSegmentation"],
         ):
 
-        if self.simulation_context.is_playing():
-            self.simulation_context.pause()
+        # if self.timeline.is_playing() or self.timeline.is_paused():
+        self.timeline.stop()
 
         if hasattr(self, "checker") and self.checker:
             self.checker.reset()
@@ -113,7 +115,7 @@ class BaseTask(ABC):
         
         self.kit.update()
 
-        self.stage = sim_utils.get_current_stage()
+        self.stage = stage_utils.get_current_stage()
         self.sensor_resolution = sensor_resolution
         self.sensor_types = sensor_types
 
@@ -137,7 +139,7 @@ class BaseTask(ABC):
         self.set_up_task()
         self._wait_for_loading()
         
-        self.simulation_context.play()
+        self.timeline.play()
 
         self.kit.update()
 
@@ -262,11 +264,11 @@ class BaseTask(ABC):
         index = 0
         # delete house
         house_prim_path = f"/World_{index}/house"
-        sim_utils.delete_prim(house_prim_path)
+        delete_prim(house_prim_path)
 
         # delete object
-        object_list_prim_paths = [prim.GetPath().pathString for prim in self.objects_list]
-        sim_utils.delete_prim(object_list_prim_paths)
+        # object_list_prim_paths = [prim.GetPath().pathString for prim in self.objects_list]
+        # delete_prim(object_list_prim_paths)
 
         
         # delete_prim('/physicsScene')
@@ -274,6 +276,9 @@ class BaseTask(ABC):
     def _load_scene(self):
         index = 0
         house_prim_path = f"/World_{index}/house"
+        self._set_ground_plane(index)
+
+        return 
         # print("house usd path: ", self.scene_parameters[index].usd_path)
         # while True:
         self.scene_parameters[index].usd_path = self.scene_parameters[index].usd_path.replace("/VRKitchen2.0", "")
@@ -282,7 +287,7 @@ class BaseTask(ABC):
         furniture_prim = self.stage.GetPrimAtPath(f"{house_prim_path}/{self.scene_parameters[index].furniture_path}")
         room_struct_prim = self.stage.GetPrimAtPath(f"{house_prim_path}/{self.scene_parameters[index].wall_path}")
           
-        house_prim = XFormPrim(house_prim_path, scales=[[0.01, 0.01, 0.01]])
+        house_prim = XFormPrim(house_prim_path, scales=[[1, 1, 1]])
         # house_prim.set_local_pose(np.array([0,0,0]) )
         
         # print(euler_angles_to_quat(np.array([np.pi/2, 0, 0])) )
@@ -303,7 +308,7 @@ class BaseTask(ABC):
         setStaticCollider(room_struct_prim, approximationShape="none")
 
         floor_prim = self.stage.GetPrimAtPath(f"{house_prim_path}/{self.scene_parameters[index].floor_path}")
-        self._set_ground_plane(index)
+        
         
         wall_material_url = self.scene_parameters[index].wall_material_url
         floor_material_url = self.scene_parameters[index].floor_material_url
@@ -389,7 +394,9 @@ class BaseTask(ABC):
         position = self.robot_parameters[index].robot_position
         rotation = self.robot_parameters[index].robot_orientation_quat
         
-        # position, rotation = self._y_up_to_z_up(position=position, rotation=rotation)
+        position, rotation = self._y_up_to_z_up(position=position, rotation=rotation)
+
+        # import ipdb; ipdb.set_trace()
 
         robot = Franka(
                 prim_path = prim_path, name = f"my_frankabot{index}",
@@ -403,6 +410,7 @@ class BaseTask(ABC):
         add_update_semantics(get_prim_at_path(prim_path), "Robot")
         self._wait_for_loading()
         self._set_sensors()
+
      
         return robot
 
@@ -468,13 +476,46 @@ class BaseTask(ABC):
         for camera_path in camera_paths:
             self.camera_paths.append(camera_path)
 
+    def _y_up_to_z_up(self, position, rotation):
+        """
+        Convert position and rotation from Y-up to Z-up coordinate frame.
+
+        position : array-like (3,)  [x, y, z] where y is height (Y-up)
+        rotation : array-like (4,)  quaternion [w, x, y, z] in Y-up frame
+
+        Returns
+        -------
+        position : np.ndarray (3,)  [x, y, z] where z is height (Z-up)
+        rotation : np.ndarray (4,)  quaternion [w, x, y, z] in Z-up frame
+        """
+        position = np.array(position, dtype=float)
+        rotation = np.array(rotation, dtype=float)
+
+        # Y-up (x, y_height, z) → Z-up (x, -z, y_height)
+        # Equivalent to a +90° rotation around the X axis.
+        new_position = np.array([position[0], -position[2], position[1]])
+
+        # Apply the same +90° X-rotation to the quaternion.
+        # q_x90 = [cos(45°), sin(45°), 0, 0]  (wxyz)
+        half = np.pi / 4.0
+        qw, qx, qy, qz = np.cos(half), np.sin(half), 0.0, 0.0
+
+        # Quaternion multiplication: q_x90 * rotation  (wxyz)
+        w, x, y, z = rotation
+        new_rotation = np.array([
+            qw*w - qx*x - qy*y - qz*z,
+            qw*x + qx*w + qy*z - qz*y,
+            qw*y - qx*z + qy*w + qz*x,
+            qw*z + qx*y - qy*x + qz*w,
+        ])
+
+        return new_position, new_rotation
+
     def _wait_for_loading(self):
-        if self.simulation_context.is_playing():
-            self.simulation_context.step(render=True)
-        # sim.render()
-        # while is_stage_loading():
-        else:
-            self.simulation_context.render()
+        sim = SimulationContext.instance()
+        sim.render()
+        while is_stage_loading():
+            sim.render()
 
     def register_recorder(self):
         index = 0

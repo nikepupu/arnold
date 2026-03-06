@@ -12,7 +12,7 @@ from isaacsim.core.prims import XFormPrim
 from environment.physics_utils import set_physics_properties
 from local_utils.env import position_reached, rotation_reached, get_pre_grasp_action, action_interpolation
 
-import isaaclab.sim as sim_utils
+from isaacsim.core.api.simulation_context.simulation_context import SimulationContext
 
 import logging
 
@@ -118,7 +118,7 @@ class OpenCabinet(BaseTask):
         `use_gt`: bool
         `step` is called twice, first for grasping object and second for manipulating object
         """
-        simulation_context = sim_utils.SimulationContext.instance()
+        simulation_context = SimulationContext.instance()
         position_rotation_interp_list = None
         current_target = None
 

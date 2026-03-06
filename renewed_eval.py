@@ -10,7 +10,8 @@ from scipy.spatial.transform import Rotation as R
 from renewed_utils.data import load_data
 from renewed_tasks import load_task
 
-from isaaclab.app import AppLauncher
+from isaacsim import SimulationApp
+
 
 # create argparser
 parser = argparse.ArgumentParser(description="Eval or Replay")
@@ -21,16 +22,11 @@ parser.add_argument("--use_gt", type=int, nargs=2, default=[1, 1], help="Use gro
 parser.add_argument("--record", action="store_true", default=False, help="Record trajectories.")
 parser.add_argument("--cfg_path", type=str, default="./configs/default.yaml", help="Path to the config file.")
 
-# append AppLauncher cli args
-AppLauncher.add_app_launcher_args(parser)
-# parse the arguments
 args_cli = parser.parse_args()
-# launch omniverse app
-app_launcher = AppLauncher(args_cli)
-simulation_app = app_launcher.app
+
+simulation_app = SimulationApp({"headless": False})  # start the simulation app, with GUI open
 
 
-from isaaclab.sim import SimulationCfg, SimulationContext
 logger = logging.getLogger(__name__)
 
 
@@ -42,8 +38,8 @@ def main():
     device = 'cpu'# FIXME: fr debug 'cuda' if torch.cuda.is_available() else 'cpu'
     render = args_cli.visualize
 
-    sim_cfg = SimulationCfg(dt=0.05, device=device)
-    simulation_context = SimulationContext(sim_cfg)
+    from isaacsim.core.api import SimulationContext
+    sim = SimulationContext(physics_dt=0.05)
 
     #TODO: enable water tasks
     task_list = [
@@ -59,8 +55,6 @@ def main():
     assert task in task_list, f"Task {task} not in {task_list}"
     assert eval_split in eval_splits, f"Eval split {eval_split} not in {eval_splits}"
     logger.info(f'Evaluating {task} {eval_split}')
-
-
     
     use_gt = args_cli.use_gt
 

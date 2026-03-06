@@ -9,13 +9,13 @@ from .base_checker import BaseChecker
 from environment.parameters import CheckerParameters
 import omni.physics.tensors.impl.api as physx
 
-import isaaclab.sim as sim_utils
 from isaacsim.core.prims import Articulation
+import isaacsim.core.utils.stage as stage_utils
 
 class JointCheck():
     def __init__(self, joint_prim, joint_name) -> None:
         self.joint_name = joint_name
-        self.stage = sim_utils.get_current_stage()
+        self.stage = stage_utils.get_current_stage()
 
         self.prim_list = list(self.stage.TraverseAll())
         # print("self.prim_list: ", self.prim_list)

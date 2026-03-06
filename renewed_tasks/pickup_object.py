@@ -6,14 +6,13 @@ from isaacsim.core.utils.stage import add_reference_to_stage
 from isaacsim.core.utils.prims import is_prim_path_valid,get_prim_at_path, get_all_matching_child_prims
 from isaacsim.core.utils.semantics import add_update_semantics
 from isaacsim.core.utils.types import ArticulationAction
+from isaacsim.core.api import SimulationContext
 
 import omni
 import torch
 from isaacsim.core.prims import XFormPrim
 from environment.physics_utils import set_physics_properties
 from local_utils.env import position_reached, rotation_reached, get_pre_grasp_action
-
-import isaaclab.sim as sim_utils
 
 import logging
 import numpy as np
@@ -81,7 +80,7 @@ class PickupObject(BaseTask):
 
         positions = torch.tensor(np.array(param.object_position)/100.0).unsqueeze(0)
         rotations = torch.tensor(param.orientation_quat).unsqueeze(0)
-        scales = torch.tensor(np.array(param.scale)/100.0).unsqueeze(0)
+        scales = torch.tensor(np.array(param.scale)).unsqueeze(0) # /100.0
 
         # use this to set relative position, orientation and scale
         XFormPrim(object_prim_path, positions= positions, orientations = rotations, scales = scales)
@@ -104,7 +103,7 @@ class PickupObject(BaseTask):
         `use_gt`: bool
         `step` is called twice, first for grasping object and second for manipulating object
         """
-        simulation_context = sim_utils.SimulationContext.instance()
+        simulation_context = SimulationContext.instance()
         current_target = None
 
         if self.current_stage == 0:

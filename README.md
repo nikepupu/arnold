@@ -63,8 +63,12 @@ uv pip install -e .
 
 ## 2. Command
 ```sh
-python renewed_eval.py --task=pickup_object --mode=eval --use_gt 1 1 --visualize
+export ISAAC_SIM_PATH=/home/yizzhao/Projects/isaacsim/_build/linux-x86_64/release
+bash $ISAAC_SIM_PATH/python.sh -m renewed_eval --task=pickup_object --mode=eval --use_gt 1 1 --visualize
+# python renewed_eval.py --task=pickup_object --mode=eval --use_gt 1 1 --visualize
 ```
+
+
 
 ```python
 import isaaclab.sim as sim_utils
