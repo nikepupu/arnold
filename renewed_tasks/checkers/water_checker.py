@@ -4,8 +4,8 @@ import math
 import numpy as np
 from pxr import UsdGeom
 from typing import List, Union
-from omni.isaac.core.utils.prims import get_prim_at_path
-from omni.isaac.core.utils.stage import get_stage_up_axis
+from isaacsim.core.utils.prims import get_prim_at_path
+from isaacsim.core.utils.stage import get_stage_up_axis
 from .base_checker import BaseChecker
 from environment.parameters import CheckerParameters
 

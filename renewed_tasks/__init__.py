@@ -37,7 +37,7 @@ def load_task(npz):
     """
     Load a task from a numpy file.
     """
-    from .checkers import BaseChecker, PickupChecker, JointChecker, OrientChecker
+    from .checkers import BaseChecker, PickupChecker, JointChecker, OrientChecker, WaterChecker
     info = npz['info'].item()
 
     scene_parameters = [SceneParameters(**info['scene_parameters'])]
@@ -160,10 +160,10 @@ def load_task(npz):
                 object_parameters.update({
                     'object_timeline_management': OrientChecker(checker_parameters=checker_parameters)
                 })
-            # elif 'water' in object_parameters['args']['task_type']:
-            #     object_parameters.update({
-            #         'object_timeline_management': WaterChecker(checker_parameters=checker_parameters)
-            #     })
+            elif 'water' in object_parameters['args']['task_type']:
+                object_parameters.update({
+                    'object_timeline_management': WaterChecker(checker_parameters=checker_parameters)
+                })
             else:
                 object_parameters.update({
                     'object_timeline_management': JointChecker(checker_parameters=checker_parameters)
@@ -206,6 +206,12 @@ def load_task(npz):
     elif object_parameters['args']['task_type'] == 'close_cabinet':
         from .close_cabinet import CloseCabinet
         env = CloseCabinet(3, 2400, stage_properties=stage_properties, record=False)
+    elif object_parameters['args']['task_type'] == 'pour_water':
+        from .pour_water import PourWater
+        env = PourWater(6, 4800, stage_properties=stage_properties, record=False)
+    elif object_parameters['args']['task_type'] == 'transfer_water':
+        from .transfer_water import TransferWater
+        env = TransferWater(6, 4800, stage_properties=stage_properties, record=False)
     else:
         raise Exception(f"task not implemented: {object_parameters['args']['task_type']}")
 

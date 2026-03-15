@@ -25,6 +25,8 @@ parser.add_argument("--cfg_path", type=str, default="./configs/default.yaml", he
 AppLauncher.add_app_launcher_args(parser)
 # parse the arguments
 args_cli = parser.parse_args()
+# Disable multi-GPU to avoid Hydra scene delegate segfaults with dual-GPU ICD configs
+args_cli.multi_gpu = False
 # launch omniverse app
 app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
@@ -42,14 +44,17 @@ def main():
     device = 'cpu'# FIXME: fr debug 'cuda' if torch.cuda.is_available() else 'cpu'
     render = args_cli.visualize
 
-    sim_cfg = SimulationCfg(dt=1.0 / 120.0, device=device)
-    simulation_context = SimulationContext(sim_cfg)
-
-    #TODO: enable water tasks
     task_list = [
             'pickup_object', 'reorient_object', 'open_drawer', 'close_drawer',
-            'open_cabinet', 'close_cabinet', #'pour_water', 'transfer_water'
+            'open_cabinet', 'close_cabinet', 'pour_water', 'transfer_water'
         ]
+
+    needs_usd_output = args_cli.task in ['pour_water', 'transfer_water']
+    sim_cfg = SimulationCfg(
+        dt=1.0 / 120.0, device=device,
+        use_fabric=not needs_usd_output,
+    )
+    simulation_context = SimulationContext(sim_cfg)
 
     eval_splits = ['test', 'novel_object', 'novel_scene', 'novel_state', 'any_state']
 

@@ -94,11 +94,10 @@ def generate_hcp_samples(boxMin: Gf.Vec3f, boxMax: Gf.Vec3f, sphereDiameter: flo
     return result
 
 
-def generate_inside_point_cloud(sphereDiameter, cloud_points, scale = 1, max_particles = 3000):
+def generate_inside_point_cloud(sphereDiameter, cloud_points, scale = 1, max_particles = 3000, offset = 2):
     """
     Generate sphere packs inside a point cloud
     """
-    offset = 2
     min_x = np.min(cloud_points[:, 0]) + offset
     min_y = np.min(cloud_points[:, 1]) + offset
     min_z = np.min(cloud_points[:, 2]) + offset
@@ -135,28 +134,48 @@ def generate_inside_point_cloud(sphereDiameter, cloud_points, scale = 1, max_par
 def set_particle_system_for_cup(
         stage, mug_init_position, volume_mesh_path: str, particle_system_path: str, particle_instance_str,
         fluid_physis_properties: FluidPhysicsProperties, asset_root,
-        simulation_owner_path: str = "/physicsScene", enable_iso_surface = False
+        simulation_owner_path: str = "/physicsScene", enable_iso_surface = False,
+        distance_scale: float = 1.0
     ):
 
     volume_mesh = UsdGeom.Mesh.Get(stage, Sdf.Path(volume_mesh_path))
 
     particle_system_path = Sdf.Path(particle_system_path)
 
+    scaled_params = dict(fluid_physis_properties.properties["particle_system_schema_parameters"])
+    if distance_scale != 1.0:
+        distance_keys = ["contact_offset", "particle_contact_offset", "rest_offset",
+                         "solid_rest_offset", "fluid_rest_offset"]
+        for k in distance_keys:
+            if k in scaled_params:
+                scaled_params[k] = scaled_params[k] * distance_scale
+        if "max_velocity" in scaled_params:
+            scaled_params["max_velocity"] = scaled_params["max_velocity"] * distance_scale
+        if "wind" in scaled_params:
+            w = scaled_params["wind"]
+            scaled_params["wind"] = Gf.Vec3f(w[0] * distance_scale, w[1] * distance_scale, w[2] * distance_scale)
+
     particle_system = particleUtils.add_physx_particle_system(
-        stage, particle_system_path, **fluid_physis_properties.properties["particle_system_schema_parameters"], simulation_owner=Sdf.Path(simulation_owner_path)
+        stage, particle_system_path, **scaled_params,
+        simulation_owner=Sdf.Path(simulation_owner_path),
+        non_particle_collision_enabled=True,
     )
     particle_instance_path = Sdf.Path(particle_instance_str)
-
-    
 
     positions_list = []
     velocities_list = []
     
-    particle_rest_offset = fluid_physis_properties.properties["particle_system_schema_parameters"]["fluid_rest_offset"]
+    particle_rest_offset = scaled_params["fluid_rest_offset"]
 
     cloud_points = np.array(volume_mesh.GetPointsAttr().Get())
+    if distance_scale != 1.0:
+        cloud_points = cloud_points * distance_scale
 
-    positions_list  = generate_inside_point_cloud(sphereDiameter=particle_rest_offset * (2.0 + 0.08), cloud_points = cloud_points, scale=1.0)
+    cloud_offset = 2 * abs(distance_scale) if distance_scale != 1.0 else 2
+    positions_list = generate_inside_point_cloud(
+        sphereDiameter=particle_rest_offset * (2.0 + 0.08),
+        cloud_points=cloud_points, scale=1.0, offset=cloud_offset
+    )
 
     stage.GetPrimAtPath(volume_mesh_path).SetActive(False)
 
@@ -169,7 +188,7 @@ def set_particle_system_for_cup(
     # TODO
     # this is not tested do not use
     if enable_iso_surface:
-        fluidRestOffset = 0.22
+        fluidRestOffset = 0.22 * distance_scale
         particleSystemPath = particle_system_path
 
         #########################################
@@ -193,7 +212,7 @@ def set_particle_system_for_cup(
                                                 **PARTICLE_PROPERTY._particleMaterialAttributes)
         physicsUtils.add_physics_material_to_prim(stage, particle_system.GetPrim(), water_path)
 
-        particle_system.CreateMaxVelocityAttr().Set(40)
+        particle_system.CreateMaxVelocityAttr().Set(40 * distance_scale)
 
         # add particle smoothing
         smoothingAPI = PhysxSchema.PhysxParticleSmoothingAPI.Apply(particle_system.GetPrim())
@@ -218,7 +237,7 @@ def set_particle_system_for_cup(
 
         stage.SetInterpolationType(Usd.InterpolationTypeHeld)
 
-        particleSpacing = 0.2
+        particleSpacing = 0.2 * distance_scale
         widths = [particleSpacing] * len(positions)
 
         particleUtils.add_physx_particleset_pointinstancer(
@@ -234,7 +253,19 @@ def set_particle_system_for_cup(
             density=0.0,
         )
 
-    else:        
+    else:
+        pbd_material_path = Sdf.Path(particle_system_path.pathString + "/pbd_material")
+        particleUtils.add_pbd_particle_material(
+            stage, pbd_material_path,
+            friction=PARTICLE_PROPERTY._particleMaterialAttributes.get("friction", 0.2),
+            viscosity=PARTICLE_PROPERTY._particleMaterialAttributes.get("viscosity", 0.0),
+            vorticity_confinement=PARTICLE_PROPERTY._particleMaterialAttributes.get("vorticity_confinement", 0.5),
+            surface_tension=PARTICLE_PROPERTY._particleMaterialAttributes.get("surface_tension", 0.05),
+            cohesion=PARTICLE_PROPERTY._particleMaterialAttributes.get("cohesion", 0.0),
+            cfl_coefficient=PARTICLE_PROPERTY._particleMaterialAttributes.get("cfl_coefficient", 1.0),
+        )
+        physicsUtils.add_physics_material_to_prim(stage, particle_system.GetPrim(), pbd_material_path)
+
         particleUtils.add_physx_particleset_pointinstancer(
             stage,
             particle_instance_path,
@@ -253,7 +284,8 @@ def set_particle_system_for_cup(
         colorPathStr = f"{particle_instance_str}/particlePrototype0"
         gprim = UsdGeom.Sphere.Define(stage, Sdf.Path(colorPathStr))
         gprim.CreateDisplayColorAttr(color)
-        gprim.GetRadiusAttr().Set(fluid_physis_properties.properties["fluid_sphere_diameter"])
+        scaled_radius = fluid_physis_properties.properties["fluid_sphere_diameter"] * distance_scale
+        gprim.CreateRadiusAttr().Set(scaled_radius)
 
     particles = UsdGeom.Xformable(stage.GetPrimAtPath(particle_instance_str))
     particles.AddTranslateOp().Set(mug_init_position)
