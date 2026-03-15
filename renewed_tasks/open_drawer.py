@@ -187,7 +187,7 @@ class OpenDrawer(BaseTask):
                         self.current_stage += 1
                         continue
             
-            if position_reached( self.c_controller, current_target[0], self.robot, thres=(0.001 if self.current_stage == 1 else 0.005) ) \
+            if position_reached( self.c_controller, current_target[0], self.robot, thres=(0.002 if self.current_stage == 1 else 0.005) ) \
             and rotation_reached( self.c_controller, current_target[1] ):
                 joint_positions = self.robot.get_joint_positions()
                 gripper_state = joint_positions[-2:]

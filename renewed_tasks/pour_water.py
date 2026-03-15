@@ -265,7 +265,7 @@ class PourWater(BaseTask):
                         continue
 
             if (position_reached(self.c_controller, current_target[0], self.robot,
-                                 thres=(0.001 if self.current_stage == 1 else 0.005))
+                                 thres=(0.002 if self.current_stage == 1 else 0.005))
                     or (self.current_stage in [4, 5])) \
                     and rotation_reached(self.c_controller, current_target[1]):
 

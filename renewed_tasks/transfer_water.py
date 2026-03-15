@@ -61,6 +61,15 @@ class TransferWater(PourWater):
             object_prim = add_reference_to_stage(param.usd_path, object_prim_path)
             volume_mesh_path = object_prim.GetPath().AppendPath("cup_volume").pathString
 
+            self.objects_list.append(object_prim)
+
+            positions = torch.tensor(np.array(param.object_position) / 100.0).unsqueeze(0)
+            rotations = torch.tensor(param.orientation_quat).unsqueeze(0)
+            scales = torch.tensor(np.array(param.scale) / 100.0).unsqueeze(0)
+
+            XFormPrim(object_prim_path, positions=positions, orientations=rotations, scales=scales)
+            self._wait_for_loading()
+
             if param.fluid_properties:
                 cup_water_init_holder = object_prim_path
 
@@ -76,15 +85,6 @@ class TransferWater(PourWater):
                 cup_water_final_holder = object_prim_path
                 self.stage.GetPrimAtPath(volume_mesh_path).SetActive(False)
 
-            self._wait_for_loading()
-
-            self.objects_list.append(object_prim)
-
-            positions = torch.tensor(np.array(param.object_position) / 100.0).unsqueeze(0)
-            rotations = torch.tensor(param.orientation_quat).unsqueeze(0)
-            scales = torch.tensor(np.array(param.scale) / 100.0).unsqueeze(0)
-
-            XFormPrim(object_prim_path, positions=positions, orientations=rotations, scales=scales)
             self._wait_for_loading()
 
             self._make_cup_opaque(object_prim_path)
