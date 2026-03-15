@@ -5,9 +5,11 @@ from local_utils.recorder import DataRecorder
 import omni
 from isaacsim.core.utils.extensions import enable_extension
 enable_extension("isaacsim.robot.manipulators.examples")
+enable_extension("isaacsim.sensors.camera")
 
 import isaaclab.sim as sim_utils
 import torch
+import os
 
 from isaacsim.core.prims import XFormPrim
 from isaacsim.core.utils.prims import is_prim_path_valid, get_prim_at_path, delete_prim
@@ -57,6 +59,8 @@ class BaseTask(ABC):
 
         self.objects_list = []
         self.recorder = None
+        self._robot_loaded = False
+        self._sensor_initialized = False
 
         self.gripper_trigger_period = 50
         self.success_check_period = 300
@@ -87,14 +91,17 @@ class BaseTask(ABC):
             self.recorder.save_buffer(self.success())
             self.recorder = None
         
-        # if hasattr(self, "checker") and self.checker:
-        #     self.checker.reset()
-        #     self.checker = None
-            
-        # # self._wait_for_loading()
-        # self.simulation_context.pause()
-        sim_utils.clear_stage()
-        # # self.remove_objects()
+        if hasattr(self, "checker") and self.checker:
+            self.checker.reset()
+            self.checker = None
+
+        if self.simulation_context.is_playing():
+            self.simulation_context.stop()
+
+        if self._robot_loaded:
+            self.clear()
+        else:
+            sim_utils.clear_stage()
         
 
     def reset(self,
@@ -105,7 +112,7 @@ class BaseTask(ABC):
         ):
 
         if self.simulation_context.is_playing():
-            self.simulation_context.pause()
+            self.simulation_context.stop()
 
         if hasattr(self, "checker") and self.checker:
             self.checker.reset()
@@ -126,14 +133,16 @@ class BaseTask(ABC):
 
         self.clear()
         self._wait_for_loading()
-        self._define_stage_properties()
 
-        # if self.use_gpu_physics:
-        #     simulation_context.get_physics_context().enable_gpu_dynamics(self.use_gpu_physics)
-        #     simulation_context.get_physics_context().set_broadphase_type("GPU")
-        
-        self._load_scene()
-        self.robot = self._load_robot()
+        if not self._robot_loaded:
+            self._define_stage_properties()
+            self._load_scene()
+            self.robot = self._load_robot()
+            self._robot_loaded = True
+        else:
+            self._load_scene()
+            self._reposition_robot()
+
         self.set_up_task()
         self._wait_for_loading()
         
@@ -148,11 +157,16 @@ class BaseTask(ABC):
             robot.set_joint_efforts(robot._articulation_view._default_joints_state.efforts)
             add_update_semantics(get_prim_at_path(robot.prim_path), "Robot")
            
-            # this is important
             robot.disable_gravity()
             self.kit.update()
 
         initialize(self.robot)
+
+        joint_positions = self.robot.get_joint_positions()
+        joint_positions[-2:] = 0.05
+        self.robot.set_joint_positions(joint_positions)
+        for _ in range(self.gripper_trigger_period):
+            self.simulation_context.step(render=False)
 
         ########## let physics settle
         if self.simulation_context is not None:
@@ -161,9 +175,6 @@ class BaseTask(ABC):
      
             self.checker.initialization_step()
 
-        # import ipdb; ipdb.set_trace()
-
-        # settle checker (we use checker to initialze articulation body states)
         if self.simulation_context is not None:
             for _ in range(10):
                 self.simulation_context.step(render=False)
@@ -171,7 +182,7 @@ class BaseTask(ABC):
         self.time_step = 0
         ########## setup controller
         self.gripper_controller = self.robot.gripper
-        self.c_controller = RMPFlowController(name="cspace_controller", robot_articulation=self.robot, physics_dt=1/20)
+        self.c_controller = RMPFlowController(name="cspace_controller", robot_articulation=self.robot, physics_dt=1/120.0)
 
         if self.record:
             self.register_recorder()
@@ -199,53 +210,37 @@ class BaseTask(ABC):
         scene = UsdPhysics.Scene.Get(self.stage, physicsScenePath)
         if not scene:
             scene = UsdPhysics.Scene.Define(self.stage, physicsScenePath)
-        
-            gravityDirection = self.stage_properties.gravity_direction
-            self._gravityDirection = Gf.Vec3f(gravityDirection[0], gravityDirection[1],  gravityDirection[2])
 
-            scene.CreateGravityDirectionAttr().Set(self._gravityDirection)
+        gravityDirection = self.stage_properties.gravity_direction
+        self._gravityDirection = Gf.Vec3f(gravityDirection[0], gravityDirection[1], gravityDirection[2])
+        scene.CreateGravityDirectionAttr().Set(self._gravityDirection)
 
-            self._gravityMagnitude = 9.81
-            scene.CreateGravityMagnitudeAttr().Set(self._gravityMagnitude)
-            
-            physxSceneAPI = PhysxSchema.PhysxSceneAPI.Apply(scene.GetPrim())
-            physxSceneAPI.CreateEnableCCDAttr().Set(True)
-            physxSceneAPI.GetTimeStepsPerSecondAttr().Set(120)
-            physxSceneAPI.CreateEnableGPUDynamicsAttr().Set(self.use_gpu_physics )
-            physxSceneAPI.CreateEnableEnhancedDeterminismAttr().Set(True)
-            physxSceneAPI.CreateEnableStabilizationAttr().Set(True)
+        self._gravityMagnitude = 9.81
+        scene.CreateGravityMagnitudeAttr().Set(self._gravityMagnitude)
 
-            physxSceneAPI.GetGpuMaxRigidContactCountAttr().Set(524288)
-            physxSceneAPI.GetGpuMaxRigidPatchCountAttr().Set(81920)
-            physxSceneAPI.GetGpuFoundLostPairsCapacityAttr().Set(8192)
-            physxSceneAPI.GetGpuFoundLostAggregatePairsCapacityAttr().Set(262144)
-            physxSceneAPI.GetGpuTotalAggregatePairsCapacityAttr().Set(8192)
-            physxSceneAPI.GetGpuMaxSoftBodyContactsAttr().Set(1048576)
-            physxSceneAPI.GetGpuMaxParticleContactsAttr().Set(1048576)
-            # physxSceneAPI.GetGpuHeapCapacityAttr().Set(67108864)
+        physxSceneAPI = PhysxSchema.PhysxSceneAPI.Apply(scene.GetPrim())
+        physxSceneAPI.CreateEnableCCDAttr().Set(True)
+        physxSceneAPI.GetTimeStepsPerSecondAttr().Set(120)
+        physxSceneAPI.CreateEnableGPUDynamicsAttr().Set(self.use_gpu_physics)
+        physxSceneAPI.CreateEnableEnhancedDeterminismAttr().Set(True)
+        physxSceneAPI.CreateEnableStabilizationAttr().Set(True)
+
+        physxSceneAPI.GetGpuMaxRigidContactCountAttr().Set(524288)
+        physxSceneAPI.GetGpuMaxRigidPatchCountAttr().Set(81920)
+        physxSceneAPI.GetGpuFoundLostPairsCapacityAttr().Set(8192)
+        physxSceneAPI.GetGpuFoundLostAggregatePairsCapacityAttr().Set(262144)
+        physxSceneAPI.GetGpuTotalAggregatePairsCapacityAttr().Set(8192)
+        physxSceneAPI.GetGpuMaxSoftBodyContactsAttr().Set(1048576)
+        physxSceneAPI.GetGpuMaxParticleContactsAttr().Set(1048576)
         
     def render(self):
-        # if not self._sensor_initialized:
-        #     return None
-
-        # simulation_context = SimulationContext.instance()
-        # simulation_context.render()
-
-        # point_clouds = []
-        # gts = {}
-        # for camera in BaseTask.cameras:
-        #     point_cloud = camera.get_pointcloud()
-        #     point_clouds.append(point_cloud)
-        
-        # gts = { 'point_clouds': point_clouds }
-
         if not self._sensor_initialized:
             return None
 
+        self.simulation_context.render()
         gts = list(map(Camera.get_current_frame, self.cameras))
         outputs = []
         for i, gt in enumerate(gts):
-            # print(gt)
             output = {'camera': self.camera_configs[i]}
             output['camera']['pose'] = self.cameras[i]._backend_utils.inverse(self.cameras[i].get_view_matrix_ros())
             if 'rgba' in gt:
@@ -262,11 +257,14 @@ class BaseTask(ABC):
         index = 0
         # delete house
         house_prim_path = f"/World_{index}/house"
-        sim_utils.delete_prim(house_prim_path)
+        if is_prim_path_valid(house_prim_path):
+            sim_utils.delete_prim(house_prim_path)
 
         # delete object
         object_list_prim_paths = [prim.GetPath().pathString for prim in self.objects_list]
-        sim_utils.delete_prim(object_list_prim_paths)
+        for prim_path in object_list_prim_paths:
+            if is_prim_path_valid(prim_path):
+                sim_utils.delete_prim(prim_path)
 
         
         # delete_prim('/physicsScene')
@@ -274,8 +272,6 @@ class BaseTask(ABC):
     def _load_scene(self):
         index = 0
         house_prim_path = f"/World_{index}/house"
-        # print("house usd path: ", self.scene_parameters[index].usd_path)
-        # while True:
         self.scene_parameters[index].usd_path = self.scene_parameters[index].usd_path.replace("/VRKitchen2.0", "")
         house_prim = add_reference_to_stage(self.scene_parameters[index].usd_path, house_prim_path)
         self._wait_for_loading()
@@ -283,23 +279,13 @@ class BaseTask(ABC):
         room_struct_prim = self.stage.GetPrimAtPath(f"{house_prim_path}/{self.scene_parameters[index].wall_path}")
           
         house_prim = XFormPrim(house_prim_path, scales=[[0.01, 0.01, 0.01]])
-        # house_prim.set_local_pose(np.array([0,0,0]) )
-        
-        # print(euler_angles_to_quat(np.array([np.pi/2, 0, 0])) )
-        # house_prim.set_local_pose(np.array([0,0,0]) )
-        # house_prim.set_local_pose(np.array([0,0,0]),  euler_angles_to_quat(np.array([np.pi/2, 0, 0])) )
 
         furniture_prim = self.stage.GetPrimAtPath(f"{house_prim_path}/{self.scene_parameters[index].furniture_path}")
-        #TODO 
-        # somehow setting this is convexhull sometimes will lead to crash in omniverse
         setStaticCollider(furniture_prim, approximationShape=CONVEXHULL)
     
         self._wait_for_loading()
 
         room_struct_prim = self.stage.GetPrimAtPath(f"{house_prim_path}/{self.scene_parameters[index].wall_path}")
-
-        #TODO 
-        # somehow setting this to convexHull will lead to some bug need to modify meshes later
         setStaticCollider(room_struct_prim, approximationShape="none")
 
         floor_prim = self.stage.GetPrimAtPath(f"{house_prim_path}/{self.scene_parameters[index].floor_path}")
@@ -327,8 +313,6 @@ class BaseTask(ABC):
             
             # print("floor_material_url: ", floor_material_url)
             if floor_material_prim_path:
-                # self._assets_root_path = get_assets_root_path()
-                # print("load floor material")
                 omni.kit.commands.execute(
                     "CreateMdlMaterialPrim",
                     mtl_url=floor_material_url,
@@ -337,7 +321,6 @@ class BaseTask(ABC):
                     select_new_prim=False,
                 )
                 self._wait_for_loading()
-                # print("created floor material")
                 omni.kit.commands.execute(
                     "BindMaterial",
                     prim_path=floor_prim.GetPath(),
@@ -345,11 +328,8 @@ class BaseTask(ABC):
                     strength=UsdShade.Tokens.strongerThanDescendants
                 )
                 self._wait_for_loading()
-                # print("load floor material done")
             
-            # print("wall_material_url: ", wall_material_url)
             if wall_material_prim_path:
-                # print("load wall material")
                 omni.kit.commands.execute(
                     "CreateMdlMaterialPrim",
                     mtl_url=wall_material_url,
@@ -359,7 +339,6 @@ class BaseTask(ABC):
                 )
                 
                 self._wait_for_loading()
-                # print("created wall material")
 
                 omni.kit.commands.execute(
                     "BindMaterial",
@@ -369,7 +348,6 @@ class BaseTask(ABC):
                 )
                 
                 self._wait_for_loading()
-                # print("load wall material done")
         
         self._wait_for_loading()
 
@@ -393,9 +371,10 @@ class BaseTask(ABC):
 
         robot = Franka(
                 prim_path = prim_path, name = f"my_frankabot{index}",
+                # custom franka.usd is in cm scale; use default (meter-scale) Franka instead
                 # usd_path = self.robot_parameters[index].usd_path,
                 orientation = rotation,
-                position = position/100.0,
+                position = position / 100.0,
                 end_effector_prim_name = 'panda_rightfinger',
                 gripper_dof_names = ["panda_finger_joint1", "panda_finger_joint2"],
             )
@@ -406,31 +385,62 @@ class BaseTask(ABC):
      
         return robot
 
-    def _set_sensors(self):
-        # self._register_camera_path()
-        # BaseTask.cameras = []
-        # for camera_path in self.camera_paths:
-        #     camera = Camera(
-        #         prim_path=camera_path,
-        #         resolution=(128, 128),
-        #     )
-        #     camera.initialize()
-        #     camera.add_pointcloud_to_frame()
-        #     BaseTask.cameras.append(camera)
-        # self.kit.update()
-        # self._sensor_initialized = True
+    def _reposition_robot(self):
+        index = 0
+        position = self.robot_parameters[index].robot_position
+        rotation = self.robot_parameters[index].robot_orientation_quat
+        self.robot.set_world_pose(position=position / 100.0, orientation=rotation)
+        self.robot.set_joint_positions(self.robot._articulation_view._default_joints_state.positions)
+        self.robot.set_joint_velocities(self.robot._articulation_view._default_joints_state.velocities)
+        self.robot.set_joint_efforts(self.robot._articulation_view._default_joints_state.efforts)
 
+    # Camera transforms from the custom franka.usd (positions in cm, converted to meters).
+    # Orientations are raw USD xform quaternions (USD camera convention: -Z forward, +Y up).
+    CAMERA_SPECS = {
+        'FrontCamera': {
+            'translation': np.array([10, -0.000010252, 120]) / 100.0,
+            'orientation': np.array([0.6830127, 0.18301270, -0.18301270, -0.6830127]),
+        },
+        'BaseCamera': {
+            'translation': np.array([7.0169, 0, 25.0]) / 100.0,
+            'orientation': np.array([0.5, 0.5, -0.5, -0.5]),
+        },
+        'LeftCamera': {
+            'translation': np.array([20.0, 90, 80.0]) / 100.0,
+            'orientation': np.array([0.0, 0.0, 0.5373, 0.8434]),
+        },
+        'GripperCameraBottom': {
+            'translation': np.array([-6, 0, -3]) / 100.0,
+            'orientation': np.array([0.0, -0.7071068, -0.7071068, 0.0]),
+        },
+        'GripperCamera': {
+            'translation': np.array([4.9648, -0.0545, -1.9908]) / 100.0,
+            'orientation': np.array([0.0723, 0.6594, 0.7461, 0.0564]),
+        },
+    }
+
+    def _set_sensors(self):
         self._register_camera_path()
         BaseTask.cameras = []
 
         for idx, camera_path in enumerate(self.camera_paths):
-            print("camera_path: ", camera_path)
+            cam_name = camera_path.split('/')[-1]
+            spec = self.CAMERA_SPECS.get(cam_name)
+
             camera = Camera(
                 prim_path=camera_path, frequency=20,
                 resolution=self.sensor_resolution,
-                # position=np.array([0.0, 0.0, 25.0]),
-                # orientation=rot_utils.euler_angles_to_quats(np.array([0, 90, 0]), degrees=True)
             )
+            if spec:
+                camera.set_local_pose(
+                    translation=spec['translation'],
+                    orientation=spec['orientation'],
+                    camera_axes="usd",
+                )
+            camera.set_focal_length(12.49)
+            camera.set_clipping_range(0.001, 10000.0)
+            camera.set_horizontal_aperture(20.955)
+            camera.set_vertical_aperture(20.955)
             camera.initialize()
             for sensor_type in self.sensor_types:
                 if 'depth' in sensor_type:
@@ -442,7 +452,6 @@ class BaseTask(ABC):
         self.kit.update()
         self._sensor_initialized = True
 
-        # camera configs
         self.camera_configs = []
         for camera in self.cameras:
             width, height = camera.get_resolution()
@@ -471,10 +480,8 @@ class BaseTask(ABC):
     def _wait_for_loading(self):
         if self.simulation_context.is_playing():
             self.simulation_context.step(render=True)
-        # sim.render()
-        # while is_stage_loading():
         else:
-            self.simulation_context.render()
+            self.kit.update()
 
     def register_recorder(self):
         index = 0

@@ -26,7 +26,7 @@ class PickupChecker(BaseChecker):
             raise Exception(f"Target prim must exist at path {self.target_prim_path}")
     
     def initialization_step(self):
-        # get transform
+        self.targetRigid.initialize()
         pos, rot = self.targetRigid.get_world_poses(usd=False)
         self.target_prim_init_y = pos[0][1].item() # extract y axis
         self.is_init = True

@@ -1,6 +1,5 @@
 import os
 import omni.ext
-import omni.appwindow
 import numpy as np
 from isaacsim.core.prims import XFormPrim
 from isaacsim.core.utils.types import ArticulationAction
