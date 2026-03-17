@@ -53,6 +53,8 @@ class TransferWater(PourWater):
         particle_instance_str = "/World_0/Particles"
         particle_system_path = '/World_0/Fluid'
 
+        import ipdb; ipdb.set_trace()
+
         for param in self.objects_parameters:
             object_prim_path = find_unique_string_name(
                 initial_name=f"/World_{index}/{param.object_type}",

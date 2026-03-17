@@ -17,7 +17,7 @@ from local_utils.transforms import get_pose_relat, euler_angles_to_quat, quat_to
 
 import isaaclab.sim as sim_utils
 
-from pxr import Gf, UsdGeom, UsdShade
+from pxr import Gf, UsdGeom, UsdShade, Sdf
 import logging
 import numpy as np
 
@@ -143,14 +143,28 @@ class PourWater(BaseTask):
                 gprim.CreateDisplayOpacityAttr([1.0])
             mat_bind = UsdShade.MaterialBindingAPI(child)
             mat = mat_bind.GetDirectBinding().GetMaterial()
+            
             if mat:
-                for shader in mat.GetPrim().GetAllChildren():
-                    opacity_attr = shader.GetAttribute("inputs:opacity_constant")
+                for shader_prim in mat.GetPrim().GetAllChildren():
+                    opacity_attr = shader_prim.GetAttribute("inputs:cutout_opacity")
                     if opacity_attr and opacity_attr.Get() is not None:
                         opacity_attr.Set(1.0)
-                    enable_opacity = shader.GetAttribute("inputs:enable_opacity")
+                    enable_opacity = shader_prim.GetAttribute("inputs:enable_opacity")
                     if enable_opacity and enable_opacity.Get() is not None:
-                        enable_opacity.Set(False)
+                        enable_opacity.Set(True) # TDOD: should False, change to True for debug
+
+                    glass_color_attr = shader_prim.GetAttribute("inputs:glass_color")
+                    if glass_color_attr and glass_color_attr.Get() is not None:
+                        glass_color_attr.Set([1.0, 0.0, 0.0]) # TDOD: Red color now, change color
+                    else:
+                        shader = UsdShade.Shader(shader_prim)
+                        glass_color_input = shader.CreateInput("glass_color", Sdf.ValueTypeNames.Color3f)
+                        glass_color_input.Set(Gf.Vec3f(1.0, 0.0, 0.0))
+
+
+                    reflection_color_attr = shader_prim.GetAttribute("inputs:reflection_color")
+                    if reflection_color_attr and reflection_color_attr.Get() is not None:
+                        reflection_color_attr.Set([1.0, 0.0, 0.0]) # TDOD: Red color now, change color
 
     def _apply_gripper_action(self, simulation_context, render, open_gripper):
         num_dofs = self.robot.num_dof

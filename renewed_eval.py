@@ -50,6 +50,11 @@ def main():
         ]
 
     needs_usd_output = args_cli.task in ['pour_water', 'transfer_water']
+    needs_path_tracing_rendering = needs_usd_output
+    if needs_path_tracing_rendering:
+        import carb
+        carb.settings.get_settings().set("/rtx/rendermode", "PathTracing")
+    
     sim_cfg = SimulationCfg(
         dt=1.0 / 120.0, device=device,
         use_fabric=not needs_usd_output,
