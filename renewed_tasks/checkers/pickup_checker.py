@@ -13,22 +13,24 @@ class PickupChecker(BaseChecker):
     def pre_initialize(self, target_prim_path):
         super().__init__()
 
-        self.target_prim_path =  target_prim_path
+        self.target_prim_path = target_prim_path
         self.target_delta_y = self.checker_parameters.target_state/100.0
-        self.targetRigid = RigidPrim(prim_paths_expr=self.target_prim_path)
         self.previous_pos = None
         self.vel = None
-
         self.check_freq = 1
 
         self.target_prim = self.stage.GetPrimAtPath(self.target_prim_path)
         if not self.target_prim:
             raise Exception(f"Target prim must exist at path {self.target_prim_path}")
-    
+
     def initialization_step(self):
+        # Create the RigidPrim here (not in pre_initialize) because
+        # the physics tensor views need time to absorb USD scene changes.
+        # By this point the simulation has stepped enough for valid views.
+        self.targetRigid = RigidPrim(prim_paths_expr=self.target_prim_path)
         self.targetRigid.initialize()
         pos, rot = self.targetRigid.get_world_poses(usd=False)
-        self.target_prim_init_y = pos[0][1].item() # extract y axis
+        self.target_prim_init_y = pos[0][1].item()
         self.is_init = True
         self.create_task_callback()
         

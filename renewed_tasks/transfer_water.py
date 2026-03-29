@@ -1,8 +1,6 @@
 from .pour_water import PourWater
 from typing import List
 from environment.parameters import *
-from isaacsim.core.utils.string import find_unique_string_name
-from isaacsim.core.utils.stage import add_reference_to_stage
 from isaacsim.core.utils.prims import is_prim_path_valid, get_prim_at_path, get_all_matching_child_prims
 from isaacsim.core.utils.semantics import add_update_semantics
 
@@ -46,21 +44,14 @@ class TransferWater(PourWater):
         super().clear()
 
     def load_object(self):
-        index = 0
         self.objects_list = []
         cup_water_init_holder = None
         cup_water_final_holder = None
         particle_instance_str = "/World_0/Particles"
         particle_system_path = '/World_0/Fluid'
 
-        import ipdb; ipdb.set_trace()
-
-        for param in self.objects_parameters:
-            object_prim_path = find_unique_string_name(
-                initial_name=f"/World_{index}/{param.object_type}",
-                is_unique_fn=lambda x: not is_prim_path_valid(x)
-            )
-            object_prim = add_reference_to_stage(param.usd_path, object_prim_path)
+        for slot, param in enumerate(self.objects_parameters):
+            object_prim_path, object_prim = self._prepare_object_prim(slot, param.usd_path)
             volume_mesh_path = object_prim.GetPath().AppendPath("cup_volume").pathString
 
             self.objects_list.append(object_prim)

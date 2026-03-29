@@ -33,7 +33,7 @@ def cup_shape_predicate(prim_path: str):
                             
     return False
 
-def load_task(npz):
+def load_task(npz, env=None):
     """
     Load a task from a numpy file.
     """
@@ -187,33 +187,33 @@ def load_task(npz):
 
     task_name = object_parameters['args']['task_type']
 
-    # TODO: Add more task types
-    if object_parameters['args']['task_type'] == 'pickup_object':
-        from .pickup_object import PickupObject
-        env = PickupObject(3, 2400, stage_properties=stage_properties, record=False)
-    elif object_parameters['args']['task_type'] == 'reorient_object':
-        from .reorient_object import ReorientObject
-        env = ReorientObject(3, 2400, stage_properties=stage_properties, record=False)
-    elif object_parameters['args']['task_type'] == 'open_drawer':
-        from .open_drawer import OpenDrawer
-        env = OpenDrawer(3, 2400, stage_properties=stage_properties, record=False)
-    elif object_parameters['args']['task_type'] == 'close_drawer':
-        from .close_drawer import CloseDrawer   
-        env = CloseDrawer(3, 2400, stage_properties=stage_properties, record=False)
-    elif object_parameters['args']['task_type'] == 'open_cabinet':
-        from .open_cabinet import OpenCabinet
-        env = OpenCabinet(3, 2400, stage_properties=stage_properties, record=False)
-    elif object_parameters['args']['task_type'] == 'close_cabinet':
-        from .close_cabinet import CloseCabinet
-        env = CloseCabinet(3, 2400, stage_properties=stage_properties, record=False)
-    elif object_parameters['args']['task_type'] == 'pour_water':
-        from .pour_water import PourWater
-        env = PourWater(6, 4800, stage_properties=stage_properties, record=False)
-    elif object_parameters['args']['task_type'] == 'transfer_water':
-        from .transfer_water import TransferWater
-        env = TransferWater(6, 4800, stage_properties=stage_properties, record=False)
-    else:
-        raise Exception(f"task not implemented: {object_parameters['args']['task_type']}")
+    if env is None:
+        if object_parameters['args']['task_type'] == 'pickup_object':
+            from .pickup_object import PickupObject
+            env = PickupObject(3, 2400, stage_properties=stage_properties, record=False)
+        elif object_parameters['args']['task_type'] == 'reorient_object':
+            from .reorient_object import ReorientObject
+            env = ReorientObject(3, 2400, stage_properties=stage_properties, record=False)
+        elif object_parameters['args']['task_type'] == 'open_drawer':
+            from .open_drawer import OpenDrawer
+            env = OpenDrawer(3, 2400, stage_properties=stage_properties, record=False)
+        elif object_parameters['args']['task_type'] == 'close_drawer':
+            from .close_drawer import CloseDrawer
+            env = CloseDrawer(3, 2400, stage_properties=stage_properties, record=False)
+        elif object_parameters['args']['task_type'] == 'open_cabinet':
+            from .open_cabinet import OpenCabinet
+            env = OpenCabinet(3, 2400, stage_properties=stage_properties, record=False)
+        elif object_parameters['args']['task_type'] == 'close_cabinet':
+            from .close_cabinet import CloseCabinet
+            env = CloseCabinet(3, 2400, stage_properties=stage_properties, record=False)
+        elif object_parameters['args']['task_type'] == 'pour_water':
+            from .pour_water import PourWater
+            env = PourWater(6, 4800, stage_properties=stage_properties, record=False)
+        elif object_parameters['args']['task_type'] == 'transfer_water':
+            from .transfer_water import TransferWater
+            env = TransferWater(6, 4800, stage_properties=stage_properties, record=False)
+        else:
+            raise Exception(f"task not implemented: {object_parameters['args']['task_type']}")
 
     robot_parameters[0].robot_position += np.array(robot_shift)
     return env, objects_parameters[0], robot_parameters, scene_parameters

@@ -1,8 +1,6 @@
 from .base_task import BaseTask
 from typing import List
 from environment.parameters import *
-from isaacsim.core.utils.string import find_unique_string_name
-from isaacsim.core.utils.stage import add_reference_to_stage
 from isaacsim.core.utils.prims import is_prim_path_valid,get_prim_at_path, get_all_matching_child_prims
 from isaacsim.core.utils.semantics import add_update_semantics
 from isaacsim.core.utils.types import ArticulationAction
@@ -35,7 +33,9 @@ class PickupObject(BaseTask):
               gt_actions
         ):
 
+        print('[PickupObject.reset] calling super().stop()', flush=True)
         super().stop()
+        print('[PickupObject.reset] super().stop() done', flush=True)
 
         self.robot_parameters: RobotParameters = robot_parameters
         self.object_parameter: ObjectParameters = object_parameters[0]
@@ -44,11 +44,12 @@ class PickupObject(BaseTask):
 
         self.robot_base = robot_base
 
+        print(f'[PickupObject.reset] calling super().reset() _robot_loaded={self._robot_loaded}', flush=True)
         obs = super().reset(
             robot_parameters = robot_parameters,
             scene_parameters = scene_parameters
         )
-        # used for max mumber of steps (grasp, raise up)
+        print('[PickupObject.reset] super().reset() done', flush=True)
         self.current_stage = 0
         self.end_stage = 0
 
@@ -62,19 +63,11 @@ class PickupObject(BaseTask):
         self.load_object()
 
     def load_object(self):
-        # TODO:
-        # For now only supports one environment, we will use cloner in the future
-        index = 0
         self.objects_list = []
         param = self.object_parameter
-        
-        object_prim_path = find_unique_string_name(
-            initial_name = f"/World_{index}/{param.object_type}",
-            is_unique_fn = lambda x: not is_prim_path_valid(x)
-        )
 
-        object_prim = add_reference_to_stage(param.usd_path, object_prim_path)
-    
+        object_prim_path, object_prim = self._prepare_object_prim(0, param.usd_path)
+
         self._wait_for_loading()
 
         self.objects_list.append(object_prim)
@@ -124,11 +117,20 @@ class PickupObject(BaseTask):
                 self.trans_target = act_pos
                 self.rotat_target = act_rot
         
+        stage_step = 0
+        stall = {"last_pos": None, "stall_count": 0}
+
         while self.current_stage < self.end_stage:
             if self.time_step % 120 == 0:
                 self.logger.info(f"tick: {self.time_step}")
             
             if self.time_step >= self.horizon:
+                self.is_success = -1
+                break
+
+            if self._check_stall(stall, stage_step):
+                print(f'[pickup] stage {self.current_stage} stalled, skipping',
+                      flush=True)
                 self.is_success = -1
                 break
 
@@ -176,6 +178,8 @@ class PickupObject(BaseTask):
 
                 current_target = None
                 self.current_stage += 1
+                stage_step = 0
+                stall = {"last_pos": None, "stall_count": 0}
                 self.logger.info(f"enter stage {self.current_stage}")
             
             else:
@@ -183,9 +187,6 @@ class PickupObject(BaseTask):
                 target_joint_positions = self.c_controller.forward(
                     target_end_effector_position=current_target[0], target_end_effector_orientation=current_target[1]
                 )
-                # if self.current_stage >= 2:
-                #     # close force
-                #     target_joint_positions.joint_positions[-2:] = 0.0
                 
                 articulation_controller = self.robot.get_articulation_controller()
                 articulation_controller.apply_action(target_joint_positions)
@@ -193,6 +194,7 @@ class PickupObject(BaseTask):
 
             simulation_context.step(render=render)
             self.time_step += 1
+            stage_step += 1
 
         if self.current_stage == self.num_stages:
             # stages exhausted, success check

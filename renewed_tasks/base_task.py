@@ -39,8 +39,10 @@ import numpy as np
 from isaacsim.core.prims import RigidPrim
 from isaacsim.core.api.robots.robot import Robot
 from isaacsim.core.utils.prims import get_prim_at_path
-from isaacsim.core.utils.stage import add_reference_to_stage, get_stage_units
+from isaacsim.core.utils.stage import add_reference_to_stage, get_stage_units, get_current_stage_id
 from isaacsim.robot.manipulators.grippers.parallel_gripper import ParallelGripper
+from isaacsim.core.simulation_manager import SimulationManager
+import omni.physics.tensors
 # from isaacsim.nucleus import get_assets_root_path
 
 
@@ -73,35 +75,82 @@ class BaseTask(ABC):
 
     def set_up_task(self):
         raise NotImplementedError
-    
+
+    def _get_ee_pos(self):
+        """Return the current end-effector position as a numpy array."""
+        pos, _ = self.c_controller.get_motion_policy().get_end_effector_as_prim().get_world_pose()
+        return np.asarray(pos, dtype=np.float64)
+
+    def _check_stall(self, stall_state, stage_step):
+        """Detect if the robot end-effector is stalled.
+
+        Args:
+            stall_state: dict with keys 'last_pos' and 'stall_count',
+                         mutated in place.
+            stage_step:  steps elapsed in the current stage.
+
+        Returns:
+            True if the robot has been stalled long enough to skip.
+        """
+        check_interval = 60          # compare every 0.5 s at 120 Hz
+        stall_threshold = 0.0005     # 0.5 mm
+        max_stall_checks = 5         # 5 consecutive stalls → give up
+
+        if stage_step > 0 and stage_step % check_interval == 0:
+            ee_pos = self._get_ee_pos()
+            if stall_state["last_pos"] is not None:
+                delta = np.linalg.norm(ee_pos - stall_state["last_pos"])
+                if delta < stall_threshold:
+                    stall_state["stall_count"] += 1
+                else:
+                    stall_state["stall_count"] = 0
+            stall_state["last_pos"] = ee_pos
+
+        return stall_state["stall_count"] >= max_stall_checks
+
     def remove_objects(self):
-        for prim in self.objects_list:
-            delete_prim(prim.GetPath().pathString)
-        if is_prim_path_valid('/World'):
-            delete_prim('/World')
-        if is_prim_path_valid('/Looks'):
-            delete_prim('/Looks')
-        if is_prim_path_valid('/lula'):
-            delete_prim('/lula')
         self.objects_list = []
-        # self._wait_for_loading()
+
+    def _kill_checker(self):
+        """Deactivate the checker and force-unsubscribe its physics/timeline
+        callbacks so they don't interfere with scene reconfiguration."""
+        if hasattr(self, "checker") and self.checker:
+            self.checker.is_init = False
+            self.checker.reset()
+            self.checker = None
+        import gc
+        gc.collect()
+
+    def _recreate_simulation_view(self):
+        """Invalidate the stale global SimulationView cached in
+        SimulationManager and create a fresh one that reflects the
+        current USD stage composition."""
+        if SimulationManager._physics_sim_view is not None:
+            SimulationManager._physics_sim_view.invalidate()
+            SimulationManager._physics_sim_view = None
+        if SimulationManager._physics_sim_view__warp is not None:
+            SimulationManager._physics_sim_view__warp.invalidate()
+            SimulationManager._physics_sim_view__warp = None
+
+        backend = SimulationManager.get_backend()
+        stage_id = get_current_stage_id()
+
+        SimulationManager._physics_sim_view = omni.physics.tensors.create_simulation_view(
+            backend, stage_id=stage_id
+        )
+        SimulationManager._physics_sim_view.set_subspace_roots("/")
+        SimulationManager._physics_sim_view__warp = omni.physics.tensors.create_simulation_view(
+            "warp", stage_id=stage_id
+        )
+        SimulationManager._physics_sim_view__warp.set_subspace_roots("/")
 
     def stop(self):
         if self.recorder is not None and self.recorder.record:
             self.recorder.save_buffer(self.success())
             self.recorder = None
-        
-        if hasattr(self, "checker") and self.checker:
-            self.checker.reset()
-            self.checker = None
 
-        if self.simulation_context.is_playing():
-            self.simulation_context.stop()
-
-        if self._robot_loaded:
-            self.clear()
-        else:
-            sim_utils.clear_stage()
+        self._kill_checker()
+        self.clear()
         
 
     def reset(self,
@@ -110,14 +159,7 @@ class BaseTask(ABC):
               sensor_resolution = (128, 128),
               sensor_types = ["rgb", "depthLinear", "camera", "semanticSegmentation"],
         ):
-
-        if self.simulation_context.is_playing():
-            self.simulation_context.stop()
-
-        if hasattr(self, "checker") and self.checker:
-            self.checker.reset()
-            self.checker = None
-        
+        self._kill_checker()
         self.kit.update()
 
         self.stage = sim_utils.get_current_stage()
@@ -139,24 +181,29 @@ class BaseTask(ABC):
             self._load_scene()
             self.robot = self._load_robot()
             self._robot_loaded = True
+
+            self.set_up_task()
+            self._wait_for_loading()
+
+            if not self.simulation_context.is_playing():
+                self.simulation_context.play()
         else:
             self._load_scene()
             self._reposition_robot()
 
-        self.set_up_task()
-        self._wait_for_loading()
-        
-        self.simulation_context.play()
+            self.set_up_task()
+            self._wait_for_loading()
 
-        self.kit.update()
+            self._recreate_simulation_view()
 
         def initialize(robot):
+            robot._articulation_view._physics_view = None
+            robot._articulation_view._is_initialized = False
             robot.initialize()
             robot.set_joint_positions(robot._articulation_view._default_joints_state.positions)
             robot.set_joint_velocities(robot._articulation_view._default_joints_state.velocities)
             robot.set_joint_efforts(robot._articulation_view._default_joints_state.efforts)
             add_update_semantics(get_prim_at_path(robot.prim_path), "Robot")
-           
             robot.disable_gravity()
             self.kit.update()
 
@@ -168,7 +215,6 @@ class BaseTask(ABC):
         for _ in range(self.gripper_trigger_period):
             self.simulation_context.step(render=False)
 
-        ########## let physics settle
         if self.simulation_context is not None:
             for _ in range(60):
                 self.simulation_context.step(render=False)
@@ -180,14 +226,12 @@ class BaseTask(ABC):
                 self.simulation_context.step(render=False)
         
         self.time_step = 0
-        ########## setup controller
         self.gripper_controller = self.robot.gripper
         self.c_controller = RMPFlowController(name="cspace_controller", robot_articulation=self.robot, physics_dt=1/120.0)
 
         if self.record:
             self.register_recorder()
 
-        # render=True for valid rendering results
         for _ in range(100):
             self.simulation_context.step(render=True)
 
@@ -222,6 +266,8 @@ class BaseTask(ABC):
         physxSceneAPI.CreateEnableCCDAttr().Set(True)
         physxSceneAPI.GetTimeStepsPerSecondAttr().Set(120)
         physxSceneAPI.CreateEnableGPUDynamicsAttr().Set(self.use_gpu_physics)
+        if self.use_gpu_physics:
+            physxSceneAPI.CreateBroadphaseTypeAttr().Set("GPU")
         physxSceneAPI.CreateEnableEnhancedDeterminismAttr().Set(True)
         physxSceneAPI.CreateEnableStabilizationAttr().Set(True)
 
@@ -254,25 +300,28 @@ class BaseTask(ABC):
         return {'images': outputs}
 
     def clear(self):
-        index = 0
-        # delete house
-        house_prim_path = f"/World_{index}/house"
-        if is_prim_path_valid(house_prim_path):
-            sim_utils.delete_prim(house_prim_path)
-
-        # delete object
-        object_list_prim_paths = [prim.GetPath().pathString for prim in self.objects_list]
-        for prim_path in object_list_prim_paths:
-            if is_prim_path_valid(prim_path):
-                sim_utils.delete_prim(prim_path)
-
-        
-        # delete_prim('/physicsScene')
+        for prim in self.objects_list:
+            if prim.IsValid():
+                prim.GetReferences().ClearReferences()
+        self.objects_list = []
     
+    def _prepare_object_prim(self, slot, usd_path):
+        """Load a USD reference into a fixed object-slot prim, reusing the
+        prim across episodes so that prims never accumulate on the stage."""
+        prim_path = f"/World_0/task_object_{slot}"
+        if is_prim_path_valid(prim_path):
+            get_prim_at_path(prim_path).GetReferences().ClearReferences()
+        prim = add_reference_to_stage(usd_path, prim_path)
+        return prim_path, prim
+
     def _load_scene(self):
         index = 0
         house_prim_path = f"/World_{index}/house"
         self.scene_parameters[index].usd_path = self.scene_parameters[index].usd_path.replace("/VRKitchen2.0", "")
+
+        if is_prim_path_valid(house_prim_path):
+            get_prim_at_path(house_prim_path).GetReferences().ClearReferences()
+
         house_prim = add_reference_to_stage(self.scene_parameters[index].usd_path, house_prim_path)
         self._wait_for_loading()
         furniture_prim = self.stage.GetPrimAtPath(f"{house_prim_path}/{self.scene_parameters[index].furniture_path}")
@@ -351,12 +400,12 @@ class BaseTask(ABC):
         
         self._wait_for_loading()
 
-    def _set_ground_plane(self,index):
+    def _set_ground_plane(self, index):
         ground_plane_path = f"/World_{index}/house/groundPlane"
-        physicsUtils.add_ground_plane(self.stage,  ground_plane_path, "Y", 5000.0, 
-            pxr.Gf.Vec3f(0.0, 0.0, 0.0), pxr.Gf.Vec3f(0.2))
+        if not is_prim_path_valid(ground_plane_path):
+            physicsUtils.add_ground_plane(self.stage, ground_plane_path, "Y", 5000.0,
+                pxr.Gf.Vec3f(0.0, 0.0, 0.0), pxr.Gf.Vec3f(0.2))
         ground_prim = self.stage.GetPrimAtPath(ground_plane_path)
-        #if self.is_loading_scene:
         ground_prim.GetAttribute('visibility').Set('invisible')
 
     def _load_robot(self):
@@ -389,10 +438,15 @@ class BaseTask(ABC):
         index = 0
         position = self.robot_parameters[index].robot_position
         rotation = self.robot_parameters[index].robot_orientation_quat
-        self.robot.set_world_pose(position=position / 100.0, orientation=rotation)
-        self.robot.set_joint_positions(self.robot._articulation_view._default_joints_state.positions)
-        self.robot.set_joint_velocities(self.robot._articulation_view._default_joints_state.velocities)
-        self.robot.set_joint_efforts(self.robot._articulation_view._default_joints_state.efforts)
+        # Use USD-level XFormPrim instead of physics-level set_world_pose,
+        # because the articulation physics view may be stale after scene
+        # changes (ClearReferences) while the simulation is still running.
+        # Joint states are reset later by initialize() in reset().
+        XFormPrim(
+            self.robot.prim_path,
+            positions=torch.tensor(np.array(position, dtype=np.float64) / 100.0).unsqueeze(0),
+            orientations=torch.tensor(np.array(rotation, dtype=np.float64)).unsqueeze(0),
+        )
 
     # Camera transforms from the custom franka.usd (positions in cm, converted to meters).
     # Orientations are raw USD xform quaternions (USD camera convention: -Z forward, +Y up).

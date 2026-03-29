@@ -14,20 +14,24 @@ class OrientChecker(BaseChecker):
     
     def pre_initialize(self, target_prim_path):
         super().__init__()
-       
-        self.target_prim_path =  target_prim_path
-        self.target_delta_y = self.checker_parameters.target_state
 
-        self.targetRigid = RigidPrim(prim_paths_expr=self.target_prim_path)
+        self.target_prim_path = target_prim_path
+        self.target_delta_y = self.checker_parameters.target_state
         self.previous_pos = None
         self.vel = None
 
         self.target_prim = self.stage.GetPrimAtPath(self.target_prim_path)
         if not self.target_prim:
             raise Exception(f"Target prim must exist at path {self.target_prim_path}")
-        
+
         self.check_freq = 1
-    
+
+    def initialization_step(self):
+        self.targetRigid = RigidPrim(prim_paths_expr=self.target_prim_path)
+        self.targetRigid.initialize()
+        self.is_init = True
+        self.create_task_callback()
+
     def get_prim_y_angle(self):
         """
         Get prim at angle difference from [0,1,0]

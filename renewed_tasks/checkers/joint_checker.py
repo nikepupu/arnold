@@ -117,23 +117,21 @@ class JointChecker(BaseChecker):
         self.init_value = self.checker_parameters.init_state
         self.target_value = self.checker_parameters.target_state
         self.target_prim_path = target_prim_path
-      
-        self.joint_checker = JointCheck(self.target_prim_path, self.target_joint)
-
-        self.check_joint_direction()
-        
-        # set joint at start
-        self.set_joint_at_start = True if self.init_value != -1 else False
 
         self.previous_percentage = None
         self.vel = None
         self.check_freq = 1
 
     def initialization_step(self):
-        super().initialization_step()
+        self.joint_checker = JointCheck(self.target_prim_path, self.target_joint)
+        self.check_joint_direction()
+        self.set_joint_at_start = True if self.init_value != -1 else False
 
-        if hasattr(self, "joint_checker") and hasattr(self.joint_checker, "articulation"):
+        if hasattr(self.joint_checker, "articulation"):
             self.joint_checker.articulation.initialize()
+
+        self.is_init = True
+        self.create_task_callback()
             
     
     def check_joint_direction(self):

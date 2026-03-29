@@ -1,8 +1,6 @@
 from .base_task import BaseTask
 from typing import List
 from environment.parameters import *
-from isaacsim.core.utils.string import find_unique_string_name
-from isaacsim.core.utils.stage import add_reference_to_stage
 from isaacsim.core.utils.prims import is_prim_path_valid, get_prim_at_path, get_all_matching_child_prims
 from isaacsim.core.utils.semantics import add_update_semantics
 from isaacsim.core.utils.types import ArticulationAction
@@ -17,7 +15,7 @@ from local_utils.transforms import get_pose_relat, euler_angles_to_quat, quat_to
 
 import isaaclab.sim as sim_utils
 
-from pxr import Gf, UsdGeom, UsdShade, Sdf
+from pxr import Gf, Sdf, UsdGeom, UsdShade
 import logging
 import numpy as np
 
@@ -67,21 +65,33 @@ class PourWater(BaseTask):
 
     def clear(self):
         super().clear()
-        for path in ['/World_0/Fluid', '/World_0/Particles', '/Looks/Water']:
-            if is_prim_path_valid(path):
-                sim_utils.delete_prim(path)
+        self._remove_particle_prims()
+
+    def _remove_particle_prims(self):
+        """Fully remove particle system prims from the USD layer.
+
+        ClearReferences() leaves the prim alive, which causes
+        particleUtils.add_physx_particle_system to fail its assertion
+        on subsequent episodes.  Use the Sdf layer API to delete the
+        prim spec so the prim no longer exists on the stage.
+        """
+        stage = omni.usd.get_context().get_stage()
+        root_layer = stage.GetRootLayer()
+        for path in ['/World_0/Fluid', '/World_0/Particles']:
+            if not is_prim_path_valid(path):
+                continue
+            sdf_path = Sdf.Path(path)
+            prim_spec = root_layer.GetPrimAtPath(sdf_path)
+            if prim_spec:
+                parent_spec = prim_spec.nameParent
+                if parent_spec:
+                    del parent_spec.nameChildren[prim_spec.name]
 
     def load_object(self):
-        index = 0
         self.objects_list = []
         param = self.object_parameter
 
-        object_prim_path = find_unique_string_name(
-            initial_name=f"/World_{index}/{param.object_type}",
-            is_unique_fn=lambda x: not is_prim_path_valid(x)
-        )
-
-        object_prim = add_reference_to_stage(param.usd_path, object_prim_path)
+        object_prim_path, object_prim = self._prepare_object_prim(0, param.usd_path)
 
         cup_water_init_holder = object_prim_path
         cup_water_final_holder = object_prim_path
@@ -143,28 +153,14 @@ class PourWater(BaseTask):
                 gprim.CreateDisplayOpacityAttr([1.0])
             mat_bind = UsdShade.MaterialBindingAPI(child)
             mat = mat_bind.GetDirectBinding().GetMaterial()
-            
             if mat:
-                for shader_prim in mat.GetPrim().GetAllChildren():
-                    opacity_attr = shader_prim.GetAttribute("inputs:cutout_opacity")
+                for shader in mat.GetPrim().GetAllChildren():
+                    opacity_attr = shader.GetAttribute("inputs:opacity_constant")
                     if opacity_attr and opacity_attr.Get() is not None:
                         opacity_attr.Set(1.0)
-                    enable_opacity = shader_prim.GetAttribute("inputs:enable_opacity")
+                    enable_opacity = shader.GetAttribute("inputs:enable_opacity")
                     if enable_opacity and enable_opacity.Get() is not None:
-                        enable_opacity.Set(True) # TDOD: should False, change to True for debug
-
-                    glass_color_attr = shader_prim.GetAttribute("inputs:glass_color")
-                    if glass_color_attr and glass_color_attr.Get() is not None:
-                        glass_color_attr.Set([1.0, 0.0, 0.0]) # TDOD: Red color now, change color
-                    else:
-                        shader = UsdShade.Shader(shader_prim)
-                        glass_color_input = shader.CreateInput("glass_color", Sdf.ValueTypeNames.Color3f)
-                        glass_color_input.Set(Gf.Vec3f(1.0, 0.0, 0.0))
-
-
-                    reflection_color_attr = shader_prim.GetAttribute("inputs:reflection_color")
-                    if reflection_color_attr and reflection_color_attr.Get() is not None:
-                        reflection_color_attr.Set([1.0, 0.0, 0.0]) # TDOD: Red color now, change color
+                        enable_opacity.Set(False)
 
     def _apply_gripper_action(self, simulation_context, render, open_gripper):
         num_dofs = self.robot.num_dof

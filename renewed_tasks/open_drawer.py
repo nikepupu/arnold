@@ -2,8 +2,6 @@
 from .base_task import BaseTask
 from typing import List
 from environment.parameters import *
-from isaacsim.core.utils.string import find_unique_string_name
-from isaacsim.core.utils.stage import add_reference_to_stage
 from isaacsim.core.utils.prims import is_prim_path_valid,get_prim_at_path, get_all_matching_child_prims
 from isaacsim.core.utils.semantics import add_update_semantics
 from isaacsim.core.utils.types import ArticulationAction
@@ -63,19 +61,11 @@ class OpenDrawer(BaseTask):
         self.load_object()
 
     def load_object(self):
-        # TODO:
-        # For now only supports one environment, we will use cloner in the future
-        index = 0
         self.objects_list = []
         param = self.object_parameter
-        
-        object_prim_path = find_unique_string_name(
-            initial_name = f"/World_{index}/{param.object_type}",
-            is_unique_fn = lambda x: not is_prim_path_valid(x)
-        )
 
-        object_prim = add_reference_to_stage(param.usd_path, object_prim_path)
-    
+        object_prim_path, object_prim = self._prepare_object_prim(0, param.usd_path)
+
         self._wait_for_loading()
 
         self.objects_list.append(object_prim)
@@ -84,9 +74,7 @@ class OpenDrawer(BaseTask):
         rotations = torch.tensor(param.orientation_quat).unsqueeze(0)
         scales = torch.tensor(np.array(param.scale)/100.0).unsqueeze(0)
 
-        
-        # use this to set relative position, orientation and scale
-        XFormPrim(object_prim_path, positions= positions, orientations = rotations, scales = scales)
+        XFormPrim(object_prim_path, positions=positions, orientations=rotations, scales=scales)
         self._wait_for_loading()
 
         if param.object_physics_properties:
@@ -152,11 +140,20 @@ class OpenDrawer(BaseTask):
             )
             position_rotation_interp_iter = iter(position_rotation_interp_list)
             
+        stage_step = 0
+        stall = {"last_pos": None, "stall_count": 0}
+
         while self.current_stage < self.end_stage:
             if self.time_step % 120 == 0:
                 self.logger.info(f"tick: {self.time_step}")
             
             if self.time_step >= self.horizon:
+                self.is_success = -1
+                break
+
+            if self._check_stall(stall, stage_step):
+                print(f'[{self.task}] stage {self.current_stage} stalled, skipping',
+                      flush=True)
                 self.is_success = -1
                 break
 
@@ -212,6 +209,8 @@ class OpenDrawer(BaseTask):
                 current_target = None
                 if self.current_stage < 2:
                     self.current_stage += 1
+                    stage_step = 0
+                    stall = {"last_pos": None, "stall_count": 0}
                     self.logger.info(f"enter stage {self.current_stage}")
             
             else:
@@ -225,6 +224,7 @@ class OpenDrawer(BaseTask):
 
             simulation_context.step(render=render)
             self.time_step += 1
+            stage_step += 1
 
         print("time step: ", self.time_step, "stage: ", self.current_stage)
         if self.current_stage == self.num_stages:
