@@ -20,6 +20,7 @@ parser.add_argument("--visualize", action="store_true", default=False, help="Vis
 parser.add_argument("--use_gt", type=int, nargs=2, default=[1, 1], help="Use ground truth for action inputs.")
 parser.add_argument("--record", action="store_true", default=False, help="Record trajectories.")
 parser.add_argument("--cfg_path", type=str, default="./configs/default.yaml", help="Path to the config file.")
+parser.add_argument("--split", type=str, default="test", help="Evaluation split to use.")
 parser.add_argument("--start_episode", type=int, default=0, help="Episode number to start from (0-indexed).")
 
 # append AppLauncher cli args
@@ -34,6 +35,7 @@ simulation_app = app_launcher.app
 
 
 from isaaclab.sim import SimulationCfg, SimulationContext
+from isaaclab.sim.simulation_cfg import PhysxCfg
 logger = logging.getLogger(__name__)
 
 
@@ -53,7 +55,8 @@ def main():
     is_water_task = args_cli.task in ['pour_water', 'transfer_water']
     sim_cfg = SimulationCfg(
         dt=1.0 / 120.0, device=device,
-        use_fabric=not is_water_task,
+        use_fabric=False,
+        physx=PhysxCfg(enable_enhanced_determinism=True),
     )
     simulation_context = SimulationContext(sim_cfg)
 
@@ -61,11 +64,11 @@ def main():
         import carb
         carb.settings.get_settings().set_string("/rtx/rendermode", "PathTracing")
 
-    eval_splits = ['test', 'novel_object', 'novel_scene', 'novel_state', 'any_state']
+    eval_splits = ['train', 'test', 'novel_object', 'novel_scene', 'novel_state', 'any_state']
 
     # TODO: write a forloop, for debug
     task = args_cli.task
-    eval_split = "test"
+    eval_split = args_cli.split
     assert task in task_list, f"Task {task} not in {task_list}"
     assert eval_split in eval_splits, f"Eval split {eval_split} not in {eval_splits}"
     logger.info(f'Evaluating {task} {eval_split}')
@@ -186,11 +189,11 @@ def main():
         else:
             logger.info(f'{fname}: {suc}')
         total += 1
-        log_str = f'correct: {correct} | total: {total} | remaining: {len(data)}'
-        logger.info(f'{log_str}\n')
+        log_str = f'correct: {correct} | total: {total} | remaining: {len(data)} | success rate: {correct/total:.2%}'
+        print(log_str, flush=True)
         stats[fname] = suc
 
-        import ipdb; ipdb.set_trace()
+        # import ipdb; ipdb.set_trace()
 
     # # Simulate
     # while simulation_app.is_running():

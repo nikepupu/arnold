@@ -218,7 +218,7 @@ class BaseTask(ABC):
             self.simulation_context.step(render=False)
 
         if self.simulation_context is not None:
-            for _ in range(60):
+            for _ in range(240):
                 self.simulation_context.step(render=False)
      
         self.checker.initialization_step()
@@ -331,13 +331,13 @@ class BaseTask(ABC):
           
         XFormPrim(house_prim_path, scales=[[0.01, 0.01, 0.01]])
 
-        furniture_prim = self.stage.GetPrimAtPath(f"{house_prim_path}/{self.scene_parameters[index].furniture_path}")
-        setStaticCollider(furniture_prim, approximationShape=CONVEXHULL)
+        # furniture_prim = self.stage.GetPrimAtPath(f"{house_prim_path}/{self.scene_parameters[index].furniture_path}")
+        # setStaticCollider(furniture_prim, approximationShape=CONVEXHULL)
     
         self._wait_for_loading()
 
-        room_struct_prim = self.stage.GetPrimAtPath(f"{house_prim_path}/{self.scene_parameters[index].wall_path}")
-        setStaticCollider(room_struct_prim, approximationShape="none")
+        # room_struct_prim = self.stage.GetPrimAtPath(f"{house_prim_path}/{self.scene_parameters[index].wall_path}")
+        # setStaticCollider(room_struct_prim, approximationShape="none")
 
         floor_prim = self.stage.GetPrimAtPath(f"{house_prim_path}/{self.scene_parameters[index].floor_path}")
         self._set_ground_plane(index)
