@@ -6,7 +6,7 @@ from environment.parameters import CheckerParameters
 
 
 class PickupChecker(BaseChecker):
-    def __init__(self, checker_parameters: CheckerParameters, tolerance = 0.05) -> None:
+    def __init__(self, checker_parameters: CheckerParameters, tolerance = 0.06) -> None:
         self.checker_parameters = checker_parameters
         self.tolerance = tolerance
 
@@ -66,9 +66,11 @@ class PickupChecker(BaseChecker):
             need_delta_y = abs(target_prim_current_y - target_height)
             if self.total_step % self.print_every == 0:
                 print(self.total_step, self.target_prim_path, "target height %s current height %s" %(target_height, target_prim_current_y))
+                print("tolerance", self.tolerance, "vel", self.vel, "need_delta_y", need_delta_y)
 
             # success condition
             if  need_delta_y < self.tolerance and self.vel is not None and self.vel < 0.1 :
+                # import ipdb; ipdb.set_trace()
                 self.success_steps += self.check_freq
                 self._on_success_hold()
             else:

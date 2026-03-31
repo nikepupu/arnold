@@ -237,8 +237,6 @@ class BaseTask(ABC):
         for _ in range(100):
             self.simulation_context.step(render=True)
 
-        import ipdb; ipdb.set_trace()
-
         return self.render()
 
     def step(self):

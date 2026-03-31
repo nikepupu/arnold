@@ -57,6 +57,10 @@ def main():
     )
     simulation_context = SimulationContext(sim_cfg)
 
+    if is_water_task:
+        import carb
+        carb.settings.get_settings().set_string("/rtx/rendermode", "PathTracing")
+
     eval_splits = ['test', 'novel_object', 'novel_scene', 'novel_state', 'any_state']
 
     # TODO: write a forloop, for debug
@@ -185,6 +189,8 @@ def main():
         log_str = f'correct: {correct} | total: {total} | remaining: {len(data)}'
         logger.info(f'{log_str}\n')
         stats[fname] = suc
+
+        import ipdb; ipdb.set_trace()
 
     # # Simulate
     # while simulation_app.is_running():
