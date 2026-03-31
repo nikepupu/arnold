@@ -114,12 +114,14 @@ class BaseTask(ABC):
     def _kill_checker(self):
         """Deactivate the checker and force-unsubscribe its physics/timeline
         callbacks so they don't interfere with scene reconfiguration."""
+        # self.simulation_context.pause()
         if hasattr(self, "checker") and self.checker:
             self.checker.is_init = False
             self.checker.reset()
             self.checker = None
         import gc
         gc.collect()
+        # self.simulation_context.play()
 
     def _recreate_simulation_view(self):
         """Invalidate the stale global SimulationView cached in
@@ -219,7 +221,7 @@ class BaseTask(ABC):
             for _ in range(60):
                 self.simulation_context.step(render=False)
      
-            self.checker.initialization_step()
+        self.checker.initialization_step()
 
         if self.simulation_context is not None:
             for _ in range(10):
@@ -234,6 +236,8 @@ class BaseTask(ABC):
 
         for _ in range(100):
             self.simulation_context.step(render=True)
+
+        import ipdb; ipdb.set_trace()
 
         return self.render()
 
@@ -327,7 +331,7 @@ class BaseTask(ABC):
         furniture_prim = self.stage.GetPrimAtPath(f"{house_prim_path}/{self.scene_parameters[index].furniture_path}")
         room_struct_prim = self.stage.GetPrimAtPath(f"{house_prim_path}/{self.scene_parameters[index].wall_path}")
           
-        house_prim = XFormPrim(house_prim_path, scales=[[0.01, 0.01, 0.01]])
+        XFormPrim(house_prim_path, scales=[[0.01, 0.01, 0.01]])
 
         furniture_prim = self.stage.GetPrimAtPath(f"{house_prim_path}/{self.scene_parameters[index].furniture_path}")
         setStaticCollider(furniture_prim, approximationShape=CONVEXHULL)
@@ -447,6 +451,12 @@ class BaseTask(ABC):
             positions=torch.tensor(np.array(position, dtype=np.float64) / 100.0).unsqueeze(0),
             orientations=torch.tensor(np.array(rotation, dtype=np.float64)).unsqueeze(0),
         )
+
+        self.c_controller._motion_policy.set_robot_base_pose(
+            robot_position=np.array(position, dtype=np.float64) / 100.0,
+            robot_orientation=np.array(rotation, dtype=np.float64)
+        )
+
 
     # Camera transforms from the custom franka.usd (positions in cm, converted to meters).
     # Orientations are raw USD xform quaternions (USD camera convention: -Z forward, +Y up).

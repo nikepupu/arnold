@@ -87,7 +87,8 @@ class JointCheck():
 
         percentage = (joint_position - self.lower)/(self.upper - self.lower) * 100
 
-        print("upper lower percentage", self.upper, self.lower, percentage)
+        
+        # print("upper lower percentage", self.upper, self.lower, percentage)
         percentage = np.clip(percentage, 0, 100)
 
         return percentage 
@@ -176,3 +177,14 @@ class JointChecker(BaseChecker):
             self.previous_percentage = percentage
             
             super().start_checking()
+
+
+    def reset(self):
+        if hasattr(self.joint_checker, "articulation"):
+            self.joint_checker.articulation._physics_view = None
+            self.joint_checker.articulation._is_initialized = False
+            self.joint_checker.articulation._invalidation_callback = None
+            
+        super().reset()
+
+        

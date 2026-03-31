@@ -64,16 +64,16 @@ uv pip install -e .
 ## 2. Command
 ```sh
 python renewed_eval.py --task=pickup_object --mode=eval --use_gt 1 1 --visualize
+python renewed_eval.py --task=close_cabinet --mode=eval --use_gt 1 1 --visualize
+python renewed_eval.py --task=transfer_water --mode=eval --use_gt 1 1 --visualize
 ```
 
 ```python
 import isaaclab.sim as sim_utils
 simulation_context = sim_utils.SimulationContext.instance()
 for _ in range(200):
-    if simulation_context.is_playing():
-        simulation_context.step(render=True)
-    else:
-        simulation_context.render()
+    print("step", _)  
+    simulation_context.step(render=True)
 ```
 
 
