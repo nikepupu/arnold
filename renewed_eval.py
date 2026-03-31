@@ -33,6 +33,9 @@ args_cli.multi_gpu = False
 app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
+# suppress simulation manager plugin logs warnings
+import carb
+carb.settings.get_settings().set_string("/log/channels/isaacsim.core.simulation_manager.plugin", "error")
 
 from isaaclab.sim import SimulationCfg, SimulationContext
 logger = logging.getLogger(__name__)

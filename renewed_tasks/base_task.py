@@ -36,8 +36,6 @@ from typing import List, Optional
 
 import carb
 import numpy as np
-import json as _json
-import time as _time
 from isaacsim.core.prims import RigidPrim
 from isaacsim.core.api.robots.robot import Robot
 from isaacsim.core.utils.prims import get_prim_at_path
@@ -47,14 +45,6 @@ from isaacsim.robot.manipulators.grippers.parallel_gripper import ParallelGrippe
 from isaacsim.core.simulation_manager import SimulationManager
 import omni.physics.tensors
 
-# #region agent log
-_DBG_LOG_BT = "/home/rgong/Desktop/arnold/.cursor/debug-2ed6cc.log"
-def _dbg_bt(path, **kw):
-    kw.setdefault("timestamp", int(_time.time()*1000))
-    kw.setdefault("sessionId", "2ed6cc")
-    with open(path, "a") as _f:
-        _f.write(_json.dumps(kw) + "\n")
-# #endregion
 # from isaacsim.nucleus import get_assets_root_path
 
 
@@ -235,36 +225,10 @@ class BaseTask(ABC):
 
         initialize(self.robot)
 
-        # #region agent log
-        _jp_after_init = self.robot.get_joint_positions()
-        _jv_after_init = self.robot.get_joint_velocities()
-        _dbg_bt(_DBG_LOG_BT, hypothesisId="F", location="base_task.py:post_initialize",
-                message="joints right after initialize()",
-                data={"joint_positions": _jp_after_init.tolist() if hasattr(_jp_after_init,'tolist') else list(_jp_after_init),
-                      "joint_velocities": _jv_after_init.tolist() if hasattr(_jv_after_init,'tolist') else list(_jv_after_init)})
-        # #endregion
-
         default_pos = self._default_joint_positions.clone()
         default_pos[..., -2:] = 0.05
         default_pos_np = np.asarray(default_pos.cpu()).flatten()
         articulation_controller = self.robot.get_articulation_controller()
-
-        # #region agent log
-        def _probe_obj_y(label):
-            _obj_path = "/World_0/task_object_0"
-            _oy = None
-            try:
-                _oprim = get_prim_at_path(_obj_path)
-                if _oprim and _oprim.IsValid():
-                    _omat = omni.usd.utils.get_world_transform_matrix(_oprim)
-                    _oy = float(_omat.ExtractTranslation()[1])
-            except Exception as _e:
-                _oy = f"ERR:{_e}"
-            _dbg_bt(_DBG_LOG_BT, hypothesisId="P", location=f"base_task.py:{label}",
-                    message=f"object Y probe at {label}",
-                    data={"object_y": _oy, "label": label})
-        _probe_obj_y("after_initialize")
-        # #endregion
 
         def _hold_default_pose(n_steps, render=False):
             for _ in range(n_steps):
@@ -276,15 +240,12 @@ class BaseTask(ABC):
                 self.simulation_context.step(render=render)
 
         _hold_default_pose(self.gripper_trigger_period)
-        _probe_obj_y("after_gripper_50")  # #region agent log  # #endregion
 
         if self.simulation_context is not None:
             _hold_default_pose(60)
-        _probe_obj_y("after_settle_60")  # #region agent log  # #endregion
 
         if self.simulation_context is not None:
             _hold_default_pose(10)
-        _probe_obj_y("after_settle_10")  # #region agent log  # #endregion
 
         self.robot.set_joint_positions(default_pos)
         self.robot.set_joint_velocities(self._default_joint_velocities)
@@ -296,39 +257,19 @@ class BaseTask(ABC):
         self.gripper_controller = self.robot.gripper
         self.c_controller = RMPFlowController(name="cspace_controller", robot_articulation=self.robot, physics_dt=1/120.0)
 
-        # #region agent log
-        _rp, _rr = self.robot.get_world_pose()
-        _jp = self.robot.get_joint_positions()
-        _jv = self.robot.get_joint_velocities()
-        _cp = self.c_controller._default_position
-        _cr = self.c_controller._default_orientation
-        _dbg_bt(_DBG_LOG_BT, hypothesisId="A,E", location="base_task.py:post_controller_init",
-                message="state after controller creation",
-                data={"robot_world_pos": _rp.tolist() if hasattr(_rp,'tolist') else list(_rp),
-                      "robot_world_rot": _rr.tolist() if hasattr(_rr,'tolist') else list(_rr),
-                      "ctrl_base_pos": _cp.tolist() if hasattr(_cp,'tolist') else list(_cp),
-                      "ctrl_base_rot": _cr.tolist() if hasattr(_cr,'tolist') else list(_cr),
-                      "joint_positions": _jp.tolist() if hasattr(_jp,'tolist') else list(_jp),
-                      "joint_velocities": _jv.tolist() if hasattr(_jv,'tolist') else list(_jv),
-                      "robot_loaded_path": self._robot_loaded})
-        # #endregion
-
         if self.record:
             self.register_recorder()
 
         for _ in range(100):
             self.simulation_context.render()
-        _probe_obj_y("after_render_100")  # #region agent log  # #endregion
-
-        # #region agent log
-        _jp_pre_init = self.robot.get_joint_positions()
-        _dbg_bt(_DBG_LOG_BT, hypothesisId="W", location="base_task.py:pre_checker_init",
-                message="joints BEFORE checker.initialization_step()",
-                data={"joint_positions": _jp_pre_init.tolist() if hasattr(_jp_pre_init,'tolist') else list(_jp_pre_init)})
-        # #endregion
 
         if self.checker is not None:
             self.checker.initialization_step()
+
+            _hold_default_pose(240, render=False)
+
+            if hasattr(self.checker, 'read_settled_init_y'):
+                self.checker.read_settled_init_y()
 
             self.robot._articulation_view._physics_view = None
             self.robot._articulation_view._is_initialized = False
@@ -347,27 +288,6 @@ class BaseTask(ABC):
             articulation_controller.apply_action(
                 ArticulationAction(joint_positions=default_pos_np)
             )
-
-            # #region agent log
-            _jp_post_init = self.robot.get_joint_positions()
-            _dbg_bt(_DBG_LOG_BT, hypothesisId="W", location="base_task.py:post_checker_init",
-                    message="joints AFTER force-reset post initialization_step()",
-                    data={"joint_positions": _jp_post_init.tolist() if hasattr(_jp_post_init,'tolist') else list(_jp_post_init)})
-            # #endregion
-
-        # #region agent log
-        _rp2, _rr2 = self.robot.get_world_pose()
-        _jp2 = self.robot.get_joint_positions()
-        _ee_prim = self.c_controller.get_motion_policy().get_end_effector_as_prim()
-        _ee_pos2, _ee_rot2 = _ee_prim.get_world_pose()
-        _dbg_bt(_DBG_LOG_BT, hypothesisId="A,E", location="base_task.py:post_settling",
-                message="state after 100 settling steps",
-                data={"robot_world_pos": _rp2.tolist() if hasattr(_rp2,'tolist') else list(_rp2),
-                      "robot_world_rot": _rr2.tolist() if hasattr(_rr2,'tolist') else list(_rr2),
-                      "joint_positions": _jp2.tolist() if hasattr(_jp2,'tolist') else list(_jp2),
-                      "ee_world_pos": np.asarray(_ee_pos2).tolist(),
-                      "ee_world_rot": np.asarray(_ee_rot2).tolist()})
-        # #endregion
 
         return self.render()
 
@@ -463,13 +383,13 @@ class BaseTask(ABC):
           
         house_prim = XFormPrim(house_prim_path, scales=[[0.01, 0.01, 0.01]])
 
-        furniture_prim = self.stage.GetPrimAtPath(f"{house_prim_path}/{self.scene_parameters[index].furniture_path}")
-        setStaticCollider(furniture_prim, approximationShape=CONVEXHULL)
+        # furniture_prim = self.stage.GetPrimAtPath(f"{house_prim_path}/{self.scene_parameters[index].furniture_path}")
+        # setStaticCollider(furniture_prim, approximationShape=CONVEXHULL)
     
         self._wait_for_loading()
 
-        room_struct_prim = self.stage.GetPrimAtPath(f"{house_prim_path}/{self.scene_parameters[index].wall_path}")
-        setStaticCollider(room_struct_prim, approximationShape="none")
+        # room_struct_prim = self.stage.GetPrimAtPath(f"{house_prim_path}/{self.scene_parameters[index].wall_path}")
+        # setStaticCollider(room_struct_prim, approximationShape="none")
 
         floor_prim = self.stage.GetPrimAtPath(f"{house_prim_path}/{self.scene_parameters[index].floor_path}")
         self._set_ground_plane(index)
