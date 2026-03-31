@@ -124,7 +124,7 @@ class liquid_cup_check():
 
 
 class WaterChecker(BaseChecker):
-    def __init__(self, checker_parameters: CheckerParameters, tolerance = 12) -> None:
+    def __init__(self, checker_parameters: CheckerParameters, tolerance = 10) -> None:
         self.checker_parameters = checker_parameters
         self.tolerance = tolerance
     

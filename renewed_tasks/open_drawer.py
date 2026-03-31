@@ -225,11 +225,12 @@ class OpenDrawer(BaseTask):
             simulation_context.step(render=render)
             self.time_step += 1
             stage_step += 1
-
-        for _ in range(self.success_check_period):
-            simulation_context.step(render=False)
-            if self.checker.success:
-                self.is_success = 1
-                break
+        
+        if self.current_stage == self.num_stages:
+            for _ in range(self.success_check_period):
+                simulation_context.step(render=False)
+                if self.checker.success:
+                    self.is_success = 1
+                    break
         
         return self.render(), self.is_success
