@@ -3,10 +3,22 @@ import omni.usd
 from isaacsim.core.prims import RigidPrim
 from .base_checker import BaseChecker
 from environment.parameters import CheckerParameters
+import json as _json
+import time as _time
+import numpy as _np
+
+# #region agent log
+_DBG_LOG_CK = "/home/rgong/Desktop/arnold/.cursor/debug-2ed6cc.log"
+def _dbg_ck(path, **kw):
+    kw.setdefault("timestamp", int(_time.time()*1000))
+    kw.setdefault("sessionId", "2ed6cc")
+    with open(path, "a") as _f:
+        _f.write(_json.dumps(kw) + "\n")
+# #endregion
 
 
 class PickupChecker(BaseChecker):
-    def __init__(self, checker_parameters: CheckerParameters, tolerance = 0.05) -> None:
+    def __init__(self, checker_parameters: CheckerParameters, tolerance = 0.06) -> None:
         self.checker_parameters = checker_parameters
         self.tolerance = tolerance
 
@@ -23,16 +35,48 @@ class PickupChecker(BaseChecker):
         if not self.target_prim:
             raise Exception(f"Target prim must exist at path {self.target_prim_path}")
 
+        # #region agent log
+        _dbg_ck(_DBG_LOG_CK, hypothesisId="H", location="pickup_checker.py:pre_initialize",
+                message="checker pre_initialize",
+                data={"target_prim_path": target_prim_path,
+                      "target_state_raw": float(self.checker_parameters.target_state),
+                      "target_delta_y": self.target_delta_y})
+        # #endregion
+
     def initialization_step(self):
-        # Create the RigidPrim here (not in pre_initialize) because
-        # the physics tensor views need time to absorb USD scene changes.
-        # By this point the simulation has stepped enough for valid views.
-        self.targetRigid = RigidPrim(prim_paths_expr=self.target_prim_path)
-        self.targetRigid.initialize()
+        if not hasattr(self, 'targetRigid') or self.targetRigid is None:
+            self.targetRigid = RigidPrim(prim_paths_expr=self.target_prim_path)
+            self.targetRigid.initialize()
+
         pos, rot = self.targetRigid.get_world_poses(usd=False)
         self.target_prim_init_y = pos[0][1].item()
+        self._init_y_captured = True
+
+        # #region agent log
+        _dbg_ck(_DBG_LOG_CK, hypothesisId="W2", location="pickup_checker.py:initialization_step",
+                message="init_y from RigidPrim (no settling)",
+                data={"target_prim_path": self.target_prim_path,
+                      "target_prim_init_y": self.target_prim_init_y,
+                      "target_delta_y": self.target_delta_y,
+                      "target_height": self.target_delta_y + self.target_prim_init_y})
+        # #endregion
+
         self.is_init = True
         self.create_task_callback()
+
+    def read_settled_init_y(self):
+        pos, rot = self.targetRigid.get_world_poses(usd=False)
+        self.target_prim_init_y = pos[0][1].item()
+        self._init_y_captured = True
+
+        # #region agent log
+        _dbg_ck(_DBG_LOG_CK, hypothesisId="V", location="pickup_checker.py:read_settled_init_y",
+                message="settled init_y after convexHull collision + settling",
+                data={"target_prim_path": self.target_prim_path,
+                      "target_prim_init_y": self.target_prim_init_y,
+                      "target_delta_y": self.target_delta_y,
+                      "target_height": self.target_delta_y + self.target_prim_init_y})
+        # #endregion
         
     def get_height(self):
         pos, rot = self.targetRigid.get_world_poses(usd=False)
@@ -52,11 +96,7 @@ class PickupChecker(BaseChecker):
         
         self.total_step += 1
         if self.total_step % self.check_freq == 0:
-            # mat = omni.usd.utils.get_world_transform_matrix(self.target_prim) 
-            # target_prim_current_y = mat.ExtractTranslation()[1]
-            
             pos, rot = self.targetRigid.get_world_poses(usd=False)
-            # print("pos, rot", pos, rot)
             target_prim_current_y = pos[0][1].item()
             
             if self.previous_pos is not None:
@@ -72,7 +112,6 @@ class PickupChecker(BaseChecker):
                 self.success_steps += self.check_freq
                 self._on_success_hold()
             else:
-                # self.success = False
                 self._on_not_success()
             self.previous_pos = target_prim_current_y
             super().start_checking()

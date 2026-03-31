@@ -36,13 +36,25 @@ from typing import List, Optional
 
 import carb
 import numpy as np
+import json as _json
+import time as _time
 from isaacsim.core.prims import RigidPrim
 from isaacsim.core.api.robots.robot import Robot
 from isaacsim.core.utils.prims import get_prim_at_path
 from isaacsim.core.utils.stage import add_reference_to_stage, get_stage_units, get_current_stage_id
+from isaacsim.core.utils.types import ArticulationAction
 from isaacsim.robot.manipulators.grippers.parallel_gripper import ParallelGripper
 from isaacsim.core.simulation_manager import SimulationManager
 import omni.physics.tensors
+
+# #region agent log
+_DBG_LOG_BT = "/home/rgong/Desktop/arnold/.cursor/debug-2ed6cc.log"
+def _dbg_bt(path, **kw):
+    kw.setdefault("timestamp", int(_time.time()*1000))
+    kw.setdefault("sessionId", "2ed6cc")
+    with open(path, "a") as _f:
+        _f.write(_json.dumps(kw) + "\n")
+# #endregion
 # from isaacsim.nucleus import get_assets_root_path
 
 
@@ -93,8 +105,8 @@ class BaseTask(ABC):
             True if the robot has been stalled long enough to skip.
         """
         check_interval = 60          # compare every 0.5 s at 120 Hz
-        stall_threshold = 0.0005     # 0.5 mm
-        max_stall_checks = 5         # 5 consecutive stalls → give up
+        stall_threshold = 0.002      # 2 mm
+        max_stall_checks = 10         # 5 consecutive stalls → give up
 
         if stage_step > 0 and stage_step % check_interval == 0:
             ee_pos = self._get_ee_pos()
@@ -200,40 +212,162 @@ class BaseTask(ABC):
             robot._articulation_view._physics_view = None
             robot._articulation_view._is_initialized = False
             robot.initialize()
-            robot.set_joint_positions(robot._articulation_view._default_joints_state.positions)
-            robot.set_joint_velocities(robot._articulation_view._default_joints_state.velocities)
-            robot.set_joint_efforts(robot._articulation_view._default_joints_state.efforts)
+            if not hasattr(self, '_default_joint_positions'):
+                self._default_joint_positions = robot._articulation_view._default_joints_state.positions.clone()
+                self._default_joint_velocities = robot._articulation_view._default_joints_state.velocities.clone()
+                self._default_joint_efforts = robot._articulation_view._default_joints_state.efforts.clone()
+            robot.set_joint_positions(self._default_joint_positions)
+            robot.set_joint_velocities(self._default_joint_velocities)
+            robot.set_joint_efforts(self._default_joint_efforts)
+            _dp = np.asarray(self._default_joint_positions.cpu()).flatten().copy()
+            articulation_controller = robot.get_articulation_controller()
+            articulation_controller.apply_action(
+                ArticulationAction(joint_positions=_dp)
+            )
             add_update_semantics(get_prim_at_path(robot.prim_path), "Robot")
             robot.disable_gravity()
             self.kit.update()
+            robot.set_joint_positions(self._default_joint_positions)
+            robot.set_joint_velocities(self._default_joint_velocities)
+            articulation_controller.apply_action(
+                ArticulationAction(joint_positions=_dp)
+            )
 
         initialize(self.robot)
 
-        joint_positions = self.robot.get_joint_positions()
-        joint_positions[-2:] = 0.05
-        self.robot.set_joint_positions(joint_positions)
-        for _ in range(self.gripper_trigger_period):
-            self.simulation_context.step(render=False)
+        # #region agent log
+        _jp_after_init = self.robot.get_joint_positions()
+        _jv_after_init = self.robot.get_joint_velocities()
+        _dbg_bt(_DBG_LOG_BT, hypothesisId="F", location="base_task.py:post_initialize",
+                message="joints right after initialize()",
+                data={"joint_positions": _jp_after_init.tolist() if hasattr(_jp_after_init,'tolist') else list(_jp_after_init),
+                      "joint_velocities": _jv_after_init.tolist() if hasattr(_jv_after_init,'tolist') else list(_jv_after_init)})
+        # #endregion
+
+        default_pos = self._default_joint_positions.clone()
+        default_pos[..., -2:] = 0.05
+        default_pos_np = np.asarray(default_pos.cpu()).flatten()
+        articulation_controller = self.robot.get_articulation_controller()
+
+        # #region agent log
+        def _probe_obj_y(label):
+            _obj_path = "/World_0/task_object_0"
+            _oy = None
+            try:
+                _oprim = get_prim_at_path(_obj_path)
+                if _oprim and _oprim.IsValid():
+                    _omat = omni.usd.utils.get_world_transform_matrix(_oprim)
+                    _oy = float(_omat.ExtractTranslation()[1])
+            except Exception as _e:
+                _oy = f"ERR:{_e}"
+            _dbg_bt(_DBG_LOG_BT, hypothesisId="P", location=f"base_task.py:{label}",
+                    message=f"object Y probe at {label}",
+                    data={"object_y": _oy, "label": label})
+        _probe_obj_y("after_initialize")
+        # #endregion
+
+        def _hold_default_pose(n_steps, render=False):
+            for _ in range(n_steps):
+                self.robot.set_joint_positions(default_pos)
+                self.robot.set_joint_velocities(self._default_joint_velocities)
+                articulation_controller.apply_action(
+                    ArticulationAction(joint_positions=default_pos_np)
+                )
+                self.simulation_context.step(render=render)
+
+        _hold_default_pose(self.gripper_trigger_period)
+        _probe_obj_y("after_gripper_50")  # #region agent log  # #endregion
 
         if self.simulation_context is not None:
-            for _ in range(60):
-                self.simulation_context.step(render=False)
-     
-            self.checker.initialization_step()
+            _hold_default_pose(60)
+        _probe_obj_y("after_settle_60")  # #region agent log  # #endregion
 
         if self.simulation_context is not None:
-            for _ in range(10):
-                self.simulation_context.step(render=False)
-        
+            _hold_default_pose(10)
+        _probe_obj_y("after_settle_10")  # #region agent log  # #endregion
+
+        self.robot.set_joint_positions(default_pos)
+        self.robot.set_joint_velocities(self._default_joint_velocities)
+        articulation_controller.apply_action(
+            ArticulationAction(joint_positions=default_pos_np)
+        )
+
         self.time_step = 0
         self.gripper_controller = self.robot.gripper
         self.c_controller = RMPFlowController(name="cspace_controller", robot_articulation=self.robot, physics_dt=1/120.0)
+
+        # #region agent log
+        _rp, _rr = self.robot.get_world_pose()
+        _jp = self.robot.get_joint_positions()
+        _jv = self.robot.get_joint_velocities()
+        _cp = self.c_controller._default_position
+        _cr = self.c_controller._default_orientation
+        _dbg_bt(_DBG_LOG_BT, hypothesisId="A,E", location="base_task.py:post_controller_init",
+                message="state after controller creation",
+                data={"robot_world_pos": _rp.tolist() if hasattr(_rp,'tolist') else list(_rp),
+                      "robot_world_rot": _rr.tolist() if hasattr(_rr,'tolist') else list(_rr),
+                      "ctrl_base_pos": _cp.tolist() if hasattr(_cp,'tolist') else list(_cp),
+                      "ctrl_base_rot": _cr.tolist() if hasattr(_cr,'tolist') else list(_cr),
+                      "joint_positions": _jp.tolist() if hasattr(_jp,'tolist') else list(_jp),
+                      "joint_velocities": _jv.tolist() if hasattr(_jv,'tolist') else list(_jv),
+                      "robot_loaded_path": self._robot_loaded})
+        # #endregion
 
         if self.record:
             self.register_recorder()
 
         for _ in range(100):
-            self.simulation_context.step(render=True)
+            self.simulation_context.render()
+        _probe_obj_y("after_render_100")  # #region agent log  # #endregion
+
+        # #region agent log
+        _jp_pre_init = self.robot.get_joint_positions()
+        _dbg_bt(_DBG_LOG_BT, hypothesisId="W", location="base_task.py:pre_checker_init",
+                message="joints BEFORE checker.initialization_step()",
+                data={"joint_positions": _jp_pre_init.tolist() if hasattr(_jp_pre_init,'tolist') else list(_jp_pre_init)})
+        # #endregion
+
+        if self.checker is not None:
+            self.checker.initialization_step()
+
+            self.robot._articulation_view._physics_view = None
+            self.robot._articulation_view._is_initialized = False
+            self.robot.initialize()
+            self.robot.set_joint_positions(default_pos)
+            self.robot.set_joint_velocities(self._default_joint_velocities)
+            self.robot.set_joint_efforts(self._default_joint_efforts)
+            articulation_controller = self.robot.get_articulation_controller()
+            articulation_controller.apply_action(
+                ArticulationAction(joint_positions=default_pos_np)
+            )
+            self.robot.disable_gravity()
+            self.kit.update()
+            self.robot.set_joint_positions(default_pos)
+            self.robot.set_joint_velocities(self._default_joint_velocities)
+            articulation_controller.apply_action(
+                ArticulationAction(joint_positions=default_pos_np)
+            )
+
+            # #region agent log
+            _jp_post_init = self.robot.get_joint_positions()
+            _dbg_bt(_DBG_LOG_BT, hypothesisId="W", location="base_task.py:post_checker_init",
+                    message="joints AFTER force-reset post initialization_step()",
+                    data={"joint_positions": _jp_post_init.tolist() if hasattr(_jp_post_init,'tolist') else list(_jp_post_init)})
+            # #endregion
+
+        # #region agent log
+        _rp2, _rr2 = self.robot.get_world_pose()
+        _jp2 = self.robot.get_joint_positions()
+        _ee_prim = self.c_controller.get_motion_policy().get_end_effector_as_prim()
+        _ee_pos2, _ee_rot2 = _ee_prim.get_world_pose()
+        _dbg_bt(_DBG_LOG_BT, hypothesisId="A,E", location="base_task.py:post_settling",
+                message="state after 100 settling steps",
+                data={"robot_world_pos": _rp2.tolist() if hasattr(_rp2,'tolist') else list(_rp2),
+                      "robot_world_rot": _rr2.tolist() if hasattr(_rr2,'tolist') else list(_rr2),
+                      "joint_positions": _jp2.tolist() if hasattr(_jp2,'tolist') else list(_jp2),
+                      "ee_world_pos": np.asarray(_ee_pos2).tolist(),
+                      "ee_world_rot": np.asarray(_ee_rot2).tolist()})
+        # #endregion
 
         return self.render()
 
@@ -427,8 +561,12 @@ class BaseTask(ABC):
                 end_effector_prim_name = 'panda_rightfinger',
                 gripper_dof_names = ["panda_finger_joint1", "panda_finger_joint2"],
             )
+
+        robot_prim = get_prim_at_path(prim_path)
+        PhysxSchema.PhysxArticulationAPI.Apply(robot_prim)
+        robot_prim.GetAttribute("physxArticulation:enabledSelfCollisions").Set(False)
         
-        add_update_semantics(get_prim_at_path(prim_path), "Robot")
+        add_update_semantics(robot_prim, "Robot")
         self._wait_for_loading()
         self._set_sensors()
      

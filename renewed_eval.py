@@ -21,6 +21,7 @@ parser.add_argument("--use_gt", type=int, nargs=2, default=[1, 1], help="Use gro
 parser.add_argument("--record", action="store_true", default=False, help="Record trajectories.")
 parser.add_argument("--cfg_path", type=str, default="./configs/default.yaml", help="Path to the config file.")
 parser.add_argument("--start_episode", type=int, default=0, help="Episode number to start from (0-indexed).")
+parser.add_argument("--split", type=str, default="test", help="Data split to evaluate (e.g. train, test, val).")
 
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
@@ -57,13 +58,9 @@ def main():
     )
     simulation_context = SimulationContext(sim_cfg)
 
-    eval_splits = ['test', 'novel_object', 'novel_scene', 'novel_state', 'any_state']
-
-    # TODO: write a forloop, for debug
     task = args_cli.task
-    eval_split = "test"
+    eval_split = args_cli.split
     assert task in task_list, f"Task {task} not in {task_list}"
-    assert eval_split in eval_splits, f"Eval split {eval_split} not in {eval_splits}"
     logger.info(f'Evaluating {task} {eval_split}')
 
 
@@ -179,17 +176,26 @@ def main():
         env.stop()
         if suc == 1:
             correct += 1
+            print(f'  SUCCESS', flush=True)
         else:
-            logger.info(f'{fname}: {suc}')
+            print(f'  FAILED (suc={suc})', flush=True)
         total += 1
-        log_str = f'correct: {correct} | total: {total} | remaining: {len(data)}'
-        logger.info(f'{log_str}\n')
+        rate = correct / total
+        print(f'  Rate so far: {correct}/{total} = {rate:.4f}', flush=True)
         stats[fname] = suc
 
-    # # Simulate
-    # while simulation_app.is_running():
-    #     # perform step
-    #     sim_context.step()
+    score = correct / total if total > 0 else 0.0
+    print(f'RESULT {task} {eval_split} {correct}/{total} {score:.4f}', flush=True)
+
+    if task not in eval_log:
+        eval_log[task] = {}
+    eval_log[task][eval_split] = {
+        'stats': stats,
+        'score': score,
+    }
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+    with open(log_path, 'w') as f:
+        json.dump(eval_log, f, indent=2)
 
     simulation_app.close()
 

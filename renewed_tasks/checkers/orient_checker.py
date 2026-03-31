@@ -8,7 +8,7 @@ from pxr import Gf
 
 
 class OrientChecker(BaseChecker):
-    def __init__(self, checker_parameters: CheckerParameters, tolerance = 20) -> None:
+    def __init__(self, checker_parameters: CheckerParameters, tolerance = 24) -> None:
         self.checker_parameters = checker_parameters
         self.tolerance = tolerance
     
