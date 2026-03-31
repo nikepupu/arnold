@@ -40,9 +40,11 @@ from isaacsim.core.prims import RigidPrim
 from isaacsim.core.api.robots.robot import Robot
 from isaacsim.core.utils.prims import get_prim_at_path
 from isaacsim.core.utils.stage import add_reference_to_stage, get_stage_units, get_current_stage_id
+from isaacsim.core.utils.types import ArticulationAction
 from isaacsim.robot.manipulators.grippers.parallel_gripper import ParallelGripper
 from isaacsim.core.simulation_manager import SimulationManager
 import omni.physics.tensors
+
 # from isaacsim.nucleus import get_assets_root_path
 
 
@@ -93,8 +95,8 @@ class BaseTask(ABC):
             True if the robot has been stalled long enough to skip.
         """
         check_interval = 60          # compare every 0.5 s at 120 Hz
-        stall_threshold = 0.0005     # 0.5 mm
-        max_stall_checks = 5         # 5 consecutive stalls → give up
+        stall_threshold = 0.002      # 2 mm
+        max_stall_checks = 10         # 5 consecutive stalls → give up
 
         if stage_step > 0 and stage_step % check_interval == 0:
             ee_pos = self._get_ee_pos()
@@ -202,20 +204,44 @@ class BaseTask(ABC):
             robot._articulation_view._physics_view = None
             robot._articulation_view._is_initialized = False
             robot.initialize()
-            robot.set_joint_positions(robot._articulation_view._default_joints_state.positions)
-            robot.set_joint_velocities(robot._articulation_view._default_joints_state.velocities)
-            robot.set_joint_efforts(robot._articulation_view._default_joints_state.efforts)
+            if not hasattr(self, '_default_joint_positions'):
+                self._default_joint_positions = robot._articulation_view._default_joints_state.positions.clone()
+                self._default_joint_velocities = robot._articulation_view._default_joints_state.velocities.clone()
+                self._default_joint_efforts = robot._articulation_view._default_joints_state.efforts.clone()
+            robot.set_joint_positions(self._default_joint_positions)
+            robot.set_joint_velocities(self._default_joint_velocities)
+            robot.set_joint_efforts(self._default_joint_efforts)
+            _dp = np.asarray(self._default_joint_positions.cpu()).flatten().copy()
+            articulation_controller = robot.get_articulation_controller()
+            articulation_controller.apply_action(
+                ArticulationAction(joint_positions=_dp)
+            )
             add_update_semantics(get_prim_at_path(robot.prim_path), "Robot")
             robot.disable_gravity()
             self.kit.update()
+            robot.set_joint_positions(self._default_joint_positions)
+            robot.set_joint_velocities(self._default_joint_velocities)
+            articulation_controller.apply_action(
+                ArticulationAction(joint_positions=_dp)
+            )
 
         initialize(self.robot)
 
-        joint_positions = self.robot.get_joint_positions()
-        joint_positions[-2:] = 0.05
-        self.robot.set_joint_positions(joint_positions)
-        for _ in range(self.gripper_trigger_period):
-            self.simulation_context.step(render=False)
+        default_pos = self._default_joint_positions.clone()
+        default_pos[..., -2:] = 0.05
+        default_pos_np = np.asarray(default_pos.cpu()).flatten()
+        articulation_controller = self.robot.get_articulation_controller()
+
+        def _hold_default_pose(n_steps, render=False):
+            for _ in range(n_steps):
+                self.robot.set_joint_positions(default_pos)
+                self.robot.set_joint_velocities(self._default_joint_velocities)
+                articulation_controller.apply_action(
+                    ArticulationAction(joint_positions=default_pos_np)
+                )
+                self.simulation_context.step(render=render)
+
+        _hold_default_pose(self.gripper_trigger_period)
 
         if self.simulation_context is not None:
             for _ in range(240):
@@ -224,9 +250,14 @@ class BaseTask(ABC):
         self.checker.initialization_step()
 
         if self.simulation_context is not None:
-            for _ in range(10):
-                self.simulation_context.step(render=False)
-        
+            _hold_default_pose(10)
+
+        self.robot.set_joint_positions(default_pos)
+        self.robot.set_joint_velocities(self._default_joint_velocities)
+        articulation_controller.apply_action(
+            ArticulationAction(joint_positions=default_pos_np)
+        )
+
         self.time_step = 0
         self.gripper_controller = self.robot.gripper
         self.c_controller = RMPFlowController(name="cspace_controller", robot_articulation=self.robot, physics_dt=1/120.0)
@@ -235,7 +266,33 @@ class BaseTask(ABC):
             self.register_recorder()
 
         for _ in range(100):
-            self.simulation_context.step(render=True)
+            self.simulation_context.render()
+
+        if self.checker is not None:
+            self.checker.initialization_step()
+
+            _hold_default_pose(240, render=False)
+
+            if hasattr(self.checker, 'read_settled_init_y'):
+                self.checker.read_settled_init_y()
+
+            self.robot._articulation_view._physics_view = None
+            self.robot._articulation_view._is_initialized = False
+            self.robot.initialize()
+            self.robot.set_joint_positions(default_pos)
+            self.robot.set_joint_velocities(self._default_joint_velocities)
+            self.robot.set_joint_efforts(self._default_joint_efforts)
+            articulation_controller = self.robot.get_articulation_controller()
+            articulation_controller.apply_action(
+                ArticulationAction(joint_positions=default_pos_np)
+            )
+            self.robot.disable_gravity()
+            self.kit.update()
+            self.robot.set_joint_positions(default_pos)
+            self.robot.set_joint_velocities(self._default_joint_velocities)
+            articulation_controller.apply_action(
+                ArticulationAction(joint_positions=default_pos_np)
+            )
 
         return self.render()
 
@@ -429,8 +486,12 @@ class BaseTask(ABC):
                 end_effector_prim_name = 'panda_rightfinger',
                 gripper_dof_names = ["panda_finger_joint1", "panda_finger_joint2"],
             )
+
+        robot_prim = get_prim_at_path(prim_path)
+        PhysxSchema.PhysxArticulationAPI.Apply(robot_prim)
+        robot_prim.GetAttribute("physxArticulation:enabledSelfCollisions").Set(False)
         
-        add_update_semantics(get_prim_at_path(prim_path), "Robot")
+        add_update_semantics(robot_prim, "Robot")
         self._wait_for_loading()
         self._set_sensors()
      

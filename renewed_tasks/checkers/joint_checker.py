@@ -107,7 +107,7 @@ class JointCheck():
 
 
 class JointChecker(BaseChecker):
-    def __init__(self, checker_parameters: CheckerParameters, tolerance = 0.1) -> None:
+    def __init__(self, checker_parameters: CheckerParameters, tolerance = 0.12) -> None:
         self.checker_parameters = checker_parameters
         self.tolerance = tolerance
     

@@ -20,7 +20,7 @@ parser.add_argument("--visualize", action="store_true", default=False, help="Vis
 parser.add_argument("--use_gt", type=int, nargs=2, default=[1, 1], help="Use ground truth for action inputs.")
 parser.add_argument("--record", action="store_true", default=False, help="Record trajectories.")
 parser.add_argument("--cfg_path", type=str, default="./configs/default.yaml", help="Path to the config file.")
-parser.add_argument("--split", type=str, default="test", help="Evaluation split to use.")
+parser.add_argument("--split", type=str, default="test", help="Data split to evaluate (e.g. train, test).")
 parser.add_argument("--start_episode", type=int, default=0, help="Episode number to start from (0-indexed).")
 
 # append AppLauncher cli args
@@ -33,6 +33,9 @@ args_cli.multi_gpu = False
 app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
+# suppress simulation manager plugin logs warnings
+import carb
+carb.settings.get_settings().set_string("/log/channels/isaacsim.core.simulation_manager.plugin", "error")
 
 from isaaclab.sim import SimulationCfg, SimulationContext
 from isaaclab.sim.simulation_cfg import PhysxCfg
@@ -55,7 +58,7 @@ def main():
     is_water_task = args_cli.task in ['pour_water', 'transfer_water']
     sim_cfg = SimulationCfg(
         dt=1.0 / 120.0, device=device,
-        use_fabric=False,
+        use_fabric=not is_water_task,
         physx=PhysxCfg(enable_enhanced_determinism=True),
     )
     simulation_context = SimulationContext(sim_cfg)
@@ -186,19 +189,13 @@ def main():
         env.stop()
         if suc == 1:
             correct += 1
+            print(f'  SUCCESS', flush=True)
         else:
-            logger.info(f'{fname}: {suc}')
+            print(f'  FAILED (suc={suc})', flush=True)
         total += 1
         log_str = f'correct: {correct} | total: {total} | remaining: {len(data)} | success rate: {correct/total:.2%}'
         print(log_str, flush=True)
         stats[fname] = suc
-
-        # import ipdb; ipdb.set_trace()
-
-    # # Simulate
-    # while simulation_app.is_running():
-    #     # perform step
-    #     sim_context.step()
 
     simulation_app.close()
 

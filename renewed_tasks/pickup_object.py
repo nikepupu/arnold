@@ -17,6 +17,7 @@ import logging
 import numpy as np
 
 class PickupObject(BaseTask):
+
     def __init__(self, num_stages, horizon, stage_properties, record) -> None:
         super().__init__(num_stages, horizon, stage_properties, record)
         self.task = 'pickup_object'
@@ -108,6 +109,7 @@ class PickupObject(BaseTask):
             else:
                 self.trans_pick = act_pos
                 self.rotat_pick = act_rot
+
         else:
             self.end_stage = self.num_stages
             if use_gt:
@@ -116,9 +118,11 @@ class PickupObject(BaseTask):
             else:
                 self.trans_target = act_pos
                 self.rotat_target = act_rot
-        
+
         stage_step = 0
         stall = {"last_pos": None, "stall_count": 0}
+        _last_arm_cmd = None
+        _gripper_open = (self.current_stage == 0)
 
         while self.current_stage < self.end_stage:
             if self.time_step % 120 == 0:
@@ -153,9 +157,10 @@ class PickupObject(BaseTask):
                 
                 else:
                     current_target = (self.trans_target, self.rotat_target, grip_open)
-            
+
             if position_reached( self.c_controller, current_target[0], self.robot, thres=(0.002 if self.current_stage == 1 else 0.005) ) \
             and rotation_reached( self.c_controller, current_target[1] ):
+
                 joint_positions = self.robot.get_joint_positions()
                 gripper_state = joint_positions[-2:]
                 current_gripper_open = (gripper_state[0] + gripper_state[1] > 0.07)
@@ -170,7 +175,13 @@ class PickupObject(BaseTask):
                     target_joint_positions_gripper = ArticulationAction(
                         joint_positions=gripper_positions, joint_indices=gripper_indices
                     )
+                    _gripper_open = current_target[2]
                     for _ in range(self.gripper_trigger_period):
+                        if _last_arm_cmd is not None:
+                            _arm_idx = torch.arange(7)
+                            _arm_pos = torch.tensor(np.array(_last_arm_cmd[:7], dtype=np.float32)).unsqueeze(0)
+                            self.robot.set_joint_positions(_arm_pos, joint_indices=_arm_idx)
+                            self.robot.set_joint_velocities(torch.zeros_like(_arm_pos), joint_indices=_arm_idx)
                         articulation_controller = self.robot.get_articulation_controller()
                         articulation_controller.apply_action(target_joint_positions_gripper)
                         self.try_record(actions=target_joint_positions_gripper)
@@ -181,27 +192,39 @@ class PickupObject(BaseTask):
                 stage_step = 0
                 stall = {"last_pos": None, "stall_count": 0}
                 self.logger.info(f"enter stage {self.current_stage}")
-            
+
             else:
                 
                 target_joint_positions = self.c_controller.forward(
                     target_end_effector_position=current_target[0], target_end_effector_orientation=current_target[1]
                 )
-                
+
+                if target_joint_positions.joint_positions is not None:
+                    _cmd = target_joint_positions.joint_positions
+                    _last_arm_cmd = _cmd
+                    _arm_idx = torch.arange(7)
+                    _arm_pos = torch.tensor(np.array(_cmd[:7], dtype=np.float32)).unsqueeze(0)
+                    self.robot.set_joint_positions(_arm_pos, joint_indices=_arm_idx)
+                    self.robot.set_joint_velocities(torch.zeros_like(_arm_pos), joint_indices=_arm_idx)
+
                 articulation_controller = self.robot.get_articulation_controller()
                 articulation_controller.apply_action(target_joint_positions)
+                _grip_pos = np.array([0.04, 0.04]) if _gripper_open else np.array([0.0, 0.0])
+                _grip_idx = [self.robot.num_dof - 2, self.robot.num_dof - 1]
+                articulation_controller.apply_action(
+                    ArticulationAction(joint_positions=_grip_pos, joint_indices=_grip_idx)
+                )
                 self.try_record(actions=target_joint_positions)
 
             simulation_context.step(render=render)
+
             self.time_step += 1
             stage_step += 1
 
-        if self.current_stage == self.num_stages:
-            # stages exhausted, success check
-            for _ in range(self.success_check_period):
-                simulation_context.step(render=False)
-                if self.checker.success:
-                    self.is_success = 1
-                    break
-        
+        for _scp_i in range(self.success_check_period):
+            simulation_context.step(render=False)
+            if self.checker.success:
+                self.is_success = 1
+                break
+
         return self.render(), self.is_success

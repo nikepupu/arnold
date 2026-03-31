@@ -24,15 +24,25 @@ class PickupChecker(BaseChecker):
             raise Exception(f"Target prim must exist at path {self.target_prim_path}")
 
     def initialization_step(self):
-        # Create the RigidPrim here (not in pre_initialize) because
-        # the physics tensor views need time to absorb USD scene changes.
-        # By this point the simulation has stepped enough for valid views.
-        self.targetRigid = RigidPrim(prim_paths_expr=self.target_prim_path)
-        self.targetRigid.initialize()
+        if not hasattr(self, 'targetRigid') or self.targetRigid is None:
+            self.targetRigid = RigidPrim(prim_paths_expr=self.target_prim_path)
+            self.targetRigid.initialize()
+
         pos, rot = self.targetRigid.get_world_poses(usd=False)
         self.target_prim_init_y = pos[0][1].item()
+        self._init_y_captured = True
+
         self.is_init = True
         self.create_task_callback()
+
+    def read_settled_init_y(self):
+        pos, rot = self.targetRigid.get_world_poses(usd=False)
+        self.target_prim_init_y = pos[0][1].item()
+        self._init_y_captured = True
+        self.total_step = 0
+        self.success_steps = 0
+        self.previous_pos = None
+        self.vel = None
         
     def get_height(self):
         pos, rot = self.targetRigid.get_world_poses(usd=False)
@@ -52,11 +62,7 @@ class PickupChecker(BaseChecker):
         
         self.total_step += 1
         if self.total_step % self.check_freq == 0:
-            # mat = omni.usd.utils.get_world_transform_matrix(self.target_prim) 
-            # target_prim_current_y = mat.ExtractTranslation()[1]
-            
             pos, rot = self.targetRigid.get_world_poses(usd=False)
-            # print("pos, rot", pos, rot)
             target_prim_current_y = pos[0][1].item()
             
             if self.previous_pos is not None:
@@ -74,7 +80,6 @@ class PickupChecker(BaseChecker):
                 self.success_steps += self.check_freq
                 self._on_success_hold()
             else:
-                # self.success = False
                 self._on_not_success()
             self.previous_pos = target_prim_current_y
             super().start_checking()
