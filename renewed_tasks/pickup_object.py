@@ -175,13 +175,8 @@ class PickupObject(BaseTask):
                     target_joint_positions_gripper = ArticulationAction(
                         joint_positions=gripper_positions, joint_indices=gripper_indices
                     )
-                    _gripper_open = current_target[2]
+                    
                     for _ in range(self.gripper_trigger_period):
-                        if _last_arm_cmd is not None:
-                            _arm_idx = torch.arange(7)
-                            _arm_pos = torch.tensor(np.array(_last_arm_cmd[:7], dtype=np.float32)).unsqueeze(0)
-                            self.robot.set_joint_positions(_arm_pos, joint_indices=_arm_idx)
-                            self.robot.set_joint_velocities(torch.zeros_like(_arm_pos), joint_indices=_arm_idx)
                         articulation_controller = self.robot.get_articulation_controller()
                         articulation_controller.apply_action(target_joint_positions_gripper)
                         self.try_record(actions=target_joint_positions_gripper)
@@ -199,21 +194,8 @@ class PickupObject(BaseTask):
                     target_end_effector_position=current_target[0], target_end_effector_orientation=current_target[1]
                 )
 
-                if target_joint_positions.joint_positions is not None:
-                    _cmd = target_joint_positions.joint_positions
-                    _last_arm_cmd = _cmd
-                    _arm_idx = torch.arange(7)
-                    _arm_pos = torch.tensor(np.array(_cmd[:7], dtype=np.float32)).unsqueeze(0)
-                    self.robot.set_joint_positions(_arm_pos, joint_indices=_arm_idx)
-                    self.robot.set_joint_velocities(torch.zeros_like(_arm_pos), joint_indices=_arm_idx)
-
                 articulation_controller = self.robot.get_articulation_controller()
                 articulation_controller.apply_action(target_joint_positions)
-                _grip_pos = np.array([0.04, 0.04]) if _gripper_open else np.array([0.0, 0.0])
-                _grip_idx = [self.robot.num_dof - 2, self.robot.num_dof - 1]
-                articulation_controller.apply_action(
-                    ArticulationAction(joint_positions=_grip_pos, joint_indices=_grip_idx)
-                )
                 self.try_record(actions=target_joint_positions)
 
             simulation_context.step(render=render)
