@@ -16,9 +16,11 @@ import isaaclab.sim as sim_utils
 import logging
 import numpy as np
 
+# from renewed_utils.draw import draw_ee_target
+
 class PickupObject(BaseTask):
 
-    def __init__(self, num_stages, horizon, stage_properties, record) -> None:
+    def __init__(self, num_stages, horizon, stage_properties, record, orient_patch = False) -> None:
         super().__init__(num_stages, horizon, stage_properties, record)
         self.task = 'pickup_object'
         self.gripper_trigger_period = 50
@@ -26,6 +28,7 @@ class PickupObject(BaseTask):
         self.grip_open = [True, False, False]
         self.logger = logging.getLogger(__name__)
         self.use_gpu_physics = False
+        self.orient_patch = orient_patch
 
     def reset(self, robot_parameters, 
               scene_parameters, 
@@ -115,6 +118,15 @@ class PickupObject(BaseTask):
             if use_gt:
                 self.trans_target, self.rotat_target = self.gt_actions[2]
                 self.trans_target = np.array(self.trans_target)/100.0
+
+                if self.orient_patch:
+                    from renewed_patches.orient import reset_target
+                    has_patch, target_y_angle = reset_target(self.file_name, self.split)
+
+                    if has_patch:
+                        self.checker.target_delta_y = target_y_angle
+
+                # import ipdb; ipdb.set_trace()
             else:
                 self.trans_target = act_pos
                 self.rotat_target = act_rot
@@ -189,7 +201,9 @@ class PickupObject(BaseTask):
                 self.logger.info(f"enter stage {self.current_stage}")
 
             else:
-                
+                # # debug draw
+                # draw_ee_target(current_target[0], current_target[1])
+
                 target_joint_positions = self.c_controller.forward(
                     target_end_effector_position=current_target[0], target_end_effector_orientation=current_target[1]
                 )

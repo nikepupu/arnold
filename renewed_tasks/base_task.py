@@ -526,7 +526,7 @@ class BaseTask(ABC):
         
         add_update_semantics(robot_prim, "Robot")
         self._wait_for_loading()
-        self._set_sensors()
+        # self._set_sensors()
      
         return robot
 

@@ -214,6 +214,10 @@ def load_task(npz, env=None):
             env = TransferWater(6, 4800, stage_properties=stage_properties, record=False)
         else:
             raise Exception(f"task not implemented: {object_parameters['args']['task_type']}")
+    
+    # patch reorient
+    if object_parameters['args']['task_type'] == 'reorient_object':
+        env.set_file_name(npz.fid.name)
 
     robot_parameters[0].robot_position += np.array(robot_shift)
     return env, objects_parameters[0], robot_parameters, scene_parameters
