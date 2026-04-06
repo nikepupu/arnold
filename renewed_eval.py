@@ -1,5 +1,6 @@
 import argparse
 import json
+import sys
 import torch
 import numpy as np
 import os
@@ -29,16 +30,25 @@ AppLauncher.add_app_launcher_args(parser)
 args_cli = parser.parse_args()
 # Disable multi-GPU to avoid Hydra scene delegate segfaults with dual-GPU ICD configs
 args_cli.multi_gpu = False
+# suppress noisy warnings from rendering/semantics subsystems at launch time
+sys.argv += [
+    "--/log/channels/omni.hydra=error",
+    "--/log/channels/isaacsim.core.utils.semantics=error",
+    "--/log/channels/isaacsim.core.simulation_manager.plugin=error",
+    "--/log/channels/usdrt.population.plugin=error",
+    "--/log/channels/omni.physx.plugin=error",
+]
 # launch omniverse app
 app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
-# suppress simulation manager plugin logs warnings
-import carb
-carb.settings.get_settings().set_string("/log/channels/isaacsim.core.simulation_manager.plugin", "error")
-
 from isaaclab.sim import SimulationCfg, SimulationContext
 from isaaclab.sim.simulation_cfg import PhysxCfg
+
+import carb
+for _ch in ("isaacsim.core.utils.semantics", "usdrt.population.plugin", "omni.physx.plugin"):
+    carb.settings.get_settings().set(f"/log/channels/{_ch}", "error")
+
 logger = logging.getLogger(__name__)
 
 
@@ -55,10 +65,14 @@ def main():
             'open_cabinet', 'close_cabinet', 'pour_water', 'transfer_water'
         ]
 
+    non_fabric_tasks = {
+        'open_drawer', 'close_drawer', 'open_cabinet', 'close_cabinet',
+        'pour_water', 'transfer_water',
+    }
     is_water_task = args_cli.task in ['pour_water', 'transfer_water']
     sim_cfg = SimulationCfg(
         dt=1.0 / 120.0, device=device,
-        use_fabric=not is_water_task,
+        use_fabric=args_cli.task not in non_fabric_tasks,
         physx=PhysxCfg(enable_enhanced_determinism=True),
     )
     simulation_context = SimulationContext(sim_cfg)

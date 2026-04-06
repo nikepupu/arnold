@@ -14,7 +14,7 @@ import os
 from isaacsim.core.prims import XFormPrim
 from isaacsim.core.utils.prims import is_prim_path_valid, get_prim_at_path, delete_prim
 from isaacsim.robot.manipulators.examples.franka import Franka
-from isaacsim.core.utils.semantics import add_update_semantics
+from renewed_utils.semantics import add_update_semantics
 
 from isaacsim.core.utils.stage import set_stage_units, set_stage_up_axis, is_stage_loading
 from isaacsim.core.utils.stage import add_reference_to_stage
@@ -192,12 +192,19 @@ class BaseTask(ABC):
             if not self.simulation_context.is_playing():
                 self.simulation_context.play()
         else:
+            self.simulation_context.pause()
+            self.kit.update()
+
             self._load_scene()
             self._reposition_robot()
 
             self.set_up_task()
             self._wait_for_loading()
 
+            omni.physx.get_physx_interface().force_load_physics_from_usd()
+            self.kit.update()
+
+            self.simulation_context.play()
             self._recreate_simulation_view()
 
         def initialize(robot):
@@ -364,12 +371,38 @@ class BaseTask(ABC):
                 prim.GetReferences().ClearReferences()
         self.objects_list = []
     
+    def _rescale_prismatic_joint_limits(self, object_prim_path, scale):
+        """Scale prismatic joint limits to match the object's XFormPrim scale.
+
+        USD joint limits are authored in the object's original coordinate space.
+        When the object is scaled on stage, prismatic (linear) limits must be
+        multiplied by the corresponding scale factor so the physical travel
+        distance matches the scaled geometry.
+        """
+        from pxr import Usd, UsdPhysics
+        scale_value = float(scale[0]) if hasattr(scale, '__len__') else float(scale)
+        if abs(scale_value - 1.0) < 1e-6:
+            return
+        root = get_prim_at_path(object_prim_path)
+        if not root or not root.IsValid():
+            return
+        for prim in Usd.PrimRange(root):
+            if prim.IsA(UsdPhysics.PrismaticJoint):
+                joint = UsdPhysics.PrismaticJoint(prim)
+                upper = joint.GetUpperLimitAttr().Get()
+                lower = joint.GetLowerLimitAttr().Get()
+                if upper is not None:
+                    joint.GetUpperLimitAttr().Set(upper * scale_value)
+                if lower is not None:
+                    joint.GetLowerLimitAttr().Set(lower * scale_value)
+
     def _prepare_object_prim(self, slot, usd_path):
-        """Load a USD reference into a fixed object-slot prim, reusing the
-        prim across episodes so that prims never accumulate on the stage."""
+        """Delete the old task-object prim entirely and load the USD into a
+        fresh prim so no stale physics state carries over."""
         prim_path = f"/World_0/task_object_{slot}"
         if is_prim_path_valid(prim_path):
-            get_prim_at_path(prim_path).GetReferences().ClearReferences()
+            delete_prim(prim_path)
+            self.kit.update()
         prim = add_reference_to_stage(usd_path, prim_path)
         return prim_path, prim
 

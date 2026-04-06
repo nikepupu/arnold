@@ -2,7 +2,7 @@ from .base_task import BaseTask
 from typing import List
 from environment.parameters import *
 from isaacsim.core.utils.prims import is_prim_path_valid, get_prim_at_path, get_all_matching_child_prims
-from isaacsim.core.utils.semantics import add_update_semantics
+from renewed_utils.semantics import add_update_semantics
 from isaacsim.core.utils.types import ArticulationAction
 
 import omni
