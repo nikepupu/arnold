@@ -287,7 +287,7 @@ def get_pre_grasp_action(grasp_action, robot_base, task):
     """
     grasp_action: ( pos_world, rot_world (wxyz) )
     robot_base: ( robot_pos, robot_rot (wxyz) )
-    position represented in cm
+    position represented in meters
     return pre-grasping action ( pre_pos_world, pre_rot_world (wxyz) )
     """
     pos_world, rot_world = grasp_action
@@ -304,14 +304,11 @@ def get_pre_grasp_action(grasp_action, robot_base, task):
     pre_pos_relat, pre_rot_relat = get_pose_relat(trans=pos_world, rot=rot_world, robot_pos=robot_pos, robot_rot=robot_rot)
 
     if task in ['pickup_object', 'open_drawer', 'close_drawer', 'open_cabinet', 'close_cabinet']:
-        # x - 5cm
-        pre_pos_relat[0] -= 5
+        pre_pos_relat[0] -= 0.05      # 5 cm
     elif task in ['reorient_object']:
-        # z at 15cm
-        pre_pos_relat[2] = 15
+        pre_pos_relat[2] = 0.15       # 15 cm
     else:
-        # water, z + 5cm
-        pre_pos_relat[2] += 5
+        pre_pos_relat[2] += 0.05      # 5 cm
     
     # world action
     pre_pos_world, pre_rot_world = get_pose_world(trans_rel=pre_pos_relat, rot_rel=pre_rot_relat, robot_pos=robot_pos, robot_rot=robot_rot)
@@ -346,7 +343,14 @@ def action_interpolation(trans_previous, rotation_previous, trans_target, rotati
 
         theta_0 = np.arctan2(r_0[1], r_0[0])
         theta_1 = np.arctan2(r_1[1], r_1[0])
-        thetas = np.linspace(theta_0 if theta_1 - theta_0 <= np.pi else theta_0 + 2 * np.pi, theta_1, len(alphas)+1)[1:]
+        delta_theta = theta_1 - theta_0
+        if delta_theta > np.pi:
+            theta_0_adj, theta_1_adj = theta_0 + 2 * np.pi, theta_1
+        elif delta_theta < -np.pi:
+            theta_0_adj, theta_1_adj = theta_0, theta_1 + 2 * np.pi
+        else:
+            theta_0_adj, theta_1_adj = theta_0, theta_1
+        thetas = np.linspace(theta_0_adj, theta_1_adj, len(alphas)+1)[1:]
 
         for alpha, radius, theta, interp_rot in zip(alphas, radii, thetas, interp_rots):
             trans_interp = np.array([

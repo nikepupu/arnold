@@ -20,8 +20,7 @@ class BaseChecker():
        
         # log
         self.total_step = 0
-        self.print_every = 120
-        self.checking_interval = 15
+        self.print_every = 240
         self.is_init = False
 
         # get time per second

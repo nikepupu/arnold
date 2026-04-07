@@ -95,7 +95,7 @@ class BaseTask(ABC):
             True if the robot has been stalled long enough to skip.
         """
         check_interval = 60          # compare every 0.5 s at 120 Hz
-        stall_threshold = 0.002      # 2 mm
+        stall_threshold = 0.01       # 1 cm
         max_stall_checks = 10         # 5 consecutive stalls → give up
 
         if stage_step > 0 and stage_step % check_interval == 0:
@@ -116,6 +116,7 @@ class BaseTask(ABC):
     def _kill_checker(self):
         """Deactivate the checker and force-unsubscribe its physics/timeline
         callbacks so they don't interfere with scene reconfiguration."""
+        
         # self.simulation_context.pause()
         if hasattr(self, "checker") and self.checker:
             self.checker.is_init = False
@@ -253,8 +254,6 @@ class BaseTask(ABC):
         if self.simulation_context is not None:
             for _ in range(240):
                 self.simulation_context.step(render=False)
-     
-        self.checker.initialization_step()
 
         if self.simulation_context is not None:
             _hold_default_pose(10)
@@ -267,6 +266,9 @@ class BaseTask(ABC):
 
         self.time_step = 0
         self.gripper_controller = self.robot.gripper
+        if hasattr(self, 'c_controller') and self.c_controller is not None:
+            self.c_controller.reset()
+            self.c_controller = None
         self.c_controller = RMPFlowController(name="cspace_controller", robot_articulation=self.robot, physics_dt=1/120.0)
 
         if self.record:
@@ -454,14 +456,15 @@ class BaseTask(ABC):
             
             # print("floor_material_url: ", floor_material_url)
             if floor_material_prim_path:
-                omni.kit.commands.execute(
-                    "CreateMdlMaterialPrim",
-                    mtl_url=floor_material_url,
-                    mtl_name=floor_mtl_name,
-                    mtl_path=floor_material_prim_path,
-                    select_new_prim=False,
-                )
-                self._wait_for_loading()
+                if not is_prim_path_valid(floor_material_prim_path):
+                    omni.kit.commands.execute(
+                        "CreateMdlMaterialPrim",
+                        mtl_url=floor_material_url,
+                        mtl_name=floor_mtl_name,
+                        mtl_path=floor_material_prim_path,
+                        select_new_prim=False,
+                    )
+                    self._wait_for_loading()
                 omni.kit.commands.execute(
                     "BindMaterial",
                     prim_path=floor_prim.GetPath(),
@@ -471,15 +474,15 @@ class BaseTask(ABC):
                 self._wait_for_loading()
             
             if wall_material_prim_path:
-                omni.kit.commands.execute(
-                    "CreateMdlMaterialPrim",
-                    mtl_url=wall_material_url,
-                    mtl_name=wall_mtl_name,
-                    mtl_path=wall_material_prim_path,
-                    select_new_prim=False,
-                )
-                
-                self._wait_for_loading()
+                if not is_prim_path_valid(wall_material_prim_path):
+                    omni.kit.commands.execute(
+                        "CreateMdlMaterialPrim",
+                        mtl_url=wall_material_url,
+                        mtl_name=wall_mtl_name,
+                        mtl_path=wall_material_prim_path,
+                        select_new_prim=False,
+                    )
+                    self._wait_for_loading()
 
                 omni.kit.commands.execute(
                     "BindMaterial",
@@ -521,9 +524,39 @@ class BaseTask(ABC):
             )
 
         robot_prim = get_prim_at_path(prim_path)
-        PhysxSchema.PhysxArticulationAPI.Apply(robot_prim)
-        robot_prim.GetAttribute("physxArticulation:enabledSelfCollisions").Set(False)
-        
+        physx_art_api = PhysxSchema.PhysxArticulationAPI.Apply(robot_prim)
+        physx_art_api.CreateEnabledSelfCollisionsAttr().Set(False)
+
+        from pxr import Usd
+        _col_prims = []
+        for _cp in Usd.PrimRange(robot_prim):
+            if _cp.HasAPI(UsdPhysics.CollisionAPI):
+                _col_prims.append(_cp.GetPath())
+        if len(_col_prims) > 1:
+            _fp_api = UsdPhysics.FilteredPairsAPI.Apply(robot_prim)
+            _fp_api.GetFilteredPairsRel().SetTargets(_col_prims)
+
+        # #region agent log
+        import math, json as _json, time as _time
+        _ARM_JOINTS = {"panda_joint1", "panda_joint2", "panda_joint3", "panda_joint4",
+                       "panda_joint5", "panda_joint6", "panda_joint7"}
+        _EXT_DEG = math.degrees(0.2)
+        _jlim_info = {}
+        for _cp in Usd.PrimRange(robot_prim):
+            if _cp.GetName() in _ARM_JOINTS:
+                _lo_attr = _cp.GetAttribute("physics:lowerLimit")
+                _hi_attr = _cp.GetAttribute("physics:upperLimit")
+                if _lo_attr.IsValid() and _hi_attr.IsValid():
+                    _old_lo, _old_hi = _lo_attr.Get(), _hi_attr.Get()
+                    _lo_attr.Set(_old_lo - _EXT_DEG)
+                    _hi_attr.Set(_old_hi + _EXT_DEG)
+                    _jlim_info[_cp.GetName()] = {"old": [round(_old_lo,2), round(_old_hi,2)],
+                                                  "new": [round(_old_lo - _EXT_DEG,2), round(_old_hi + _EXT_DEG,2)]}
+        with open('/home/rgong/Desktop/arnold/.cursor/debug-5787ac.log', 'a') as _f:
+            _f.write(_json.dumps({"sessionId":"5787ac","location":"base_task.py:_load_robot","message":"joint_limits_extended",
+                                  "data":_jlim_info,"timestamp":int(_time.time()*1000),"hypothesisId":"AJ"}) + '\n')
+        # #endregion
+
         add_update_semantics(robot_prim, "Robot")
         self._wait_for_loading()
         # self._set_sensors()

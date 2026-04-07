@@ -6,6 +6,9 @@ from .parameters import ObjectPhysicsProperties
 
 
 def set_collision(stage, prim : Usd.Prim, approximationShape:str):
+    if not UsdPhysics.CollisionAPI.Get(stage, prim.GetPath()):
+        UsdPhysics.CollisionAPI.Apply(prim)
+
     collision_api = UsdPhysics.MeshCollisionAPI.Get(stage, prim.GetPath())
     if not collision_api:
         collision_api = UsdPhysics.MeshCollisionAPI.Apply(prim)
@@ -73,7 +76,7 @@ def set_physics_properties(stage, prim : Usd.Prim, properties: ObjectPhysicsProp
         set_mass(stage, prim, properties.properties[MASS])
     
     if DAMPING_COEFFICIENT in properties.properties:
-        set_joint_properties(stage, prim, properties.properties[DAMPING_COEFFICIENT]/100.0 )
+        set_joint_properties(stage, prim, properties.properties[DAMPING_COEFFICIENT] )
 
 
 def set_joint_properties(stage, prim, damping_cofficient):
@@ -81,10 +84,10 @@ def set_joint_properties(stage, prim, damping_cofficient):
     if joint_driver:
         joint_driver.CreateDampingAttr(damping_cofficient)
 
-    # find linear drive
     joint_driver = UsdPhysics.DriveAPI.Get(prim, "angular")
     if joint_driver:
-        joint_driver.CreateDampingAttr(damping_cofficient)
+        joint_driver.CreateDampingAttr(0.0)
+        joint_driver.CreateStiffnessAttr(0.0)
     
     # find linear joint upperlimit, this assumes that lower limit is 0
     joint = UsdPhysics.PrismaticJoint.Get(stage, prim.GetPath())	

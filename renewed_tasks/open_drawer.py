@@ -33,7 +33,6 @@ class OpenDrawer(BaseTask):
               robot_base,
               gt_actions
         ):
-
         super().stop()
 
         self.robot_parameters: RobotParameters = robot_parameters
@@ -134,7 +133,7 @@ class OpenDrawer(BaseTask):
                 self.rotat_target = act_rot
 
             # interpolation for manipulation
-            num_interpolation = int(10000 / 6 * np.linalg.norm(self.trans_target - self.trans_pick))
+            num_interpolation = int(10000 / 6.0 * np.linalg.norm(self.trans_target - self.trans_pick))
             alphas = np.linspace(start=0, stop=1, num=num_interpolation)[1:]
           
             position_rotation_interp_list = action_interpolation(
@@ -142,6 +141,9 @@ class OpenDrawer(BaseTask):
             )
             position_rotation_interp_iter = iter(position_rotation_interp_list)
             
+        stage_step = 0
+        stall = {"last_pos": None, "stall_count": 0}
+
         while self.current_stage < self.end_stage:
             if self.time_step % 120 == 0:
                 self.logger.info(f"tick: {self.time_step}")
@@ -149,6 +151,15 @@ class OpenDrawer(BaseTask):
             if self.time_step >= self.horizon:
                 self.is_success = -1
                 break
+
+            if self.current_stage < 2 and self._check_stall(stall, stage_step):
+                print(f'[open_drawer] stage {self.current_stage} stalled, advancing',
+                      flush=True)
+                current_target = None
+                self.current_stage += 1
+                stage_step = 0
+                stall = {"last_pos": None, "stall_count": 0}
+                continue
 
             if current_target is None:
                 grip_open = self.grip_open[self.current_stage]
@@ -166,8 +177,8 @@ class OpenDrawer(BaseTask):
 
                 elif self.current_stage == 1:
                     current_target = (self.trans_pick, self.rotat_pick, grip_open)
-                
-                else:
+
+                elif self.current_stage == 2:
                     try:
                         trans_interp, rotation_interp = next(position_rotation_interp_iter)
                         current_target = (trans_interp, rotation_interp, grip_open)
@@ -202,6 +213,8 @@ class OpenDrawer(BaseTask):
                 current_target = None
                 if self.current_stage < 2:
                     self.current_stage += 1
+                    stage_step = 0
+                    stall = {"last_pos": None, "stall_count": 0}
                     self.logger.info(f"enter stage {self.current_stage}")
             
             else:
@@ -215,9 +228,10 @@ class OpenDrawer(BaseTask):
 
             simulation_context.step(render=render)
             self.time_step += 1
+            stage_step += 1
         
         if self.current_stage == self.num_stages:
-            for _ in range(self.success_check_period):
+            for _sc_i in range(self.success_check_period):
                 simulation_context.step(render=False)
                 if self.checker.success:
                     self.is_success = 1

@@ -145,10 +145,13 @@ class PickupObject(BaseTask):
                 break
 
             if self._check_stall(stall, stage_step):
-                print(f'[pickup] stage {self.current_stage} stalled, skipping',
+                print(f'[pickup] stage {self.current_stage} stalled, advancing',
                       flush=True)
-                self.is_success = -1
-                break
+                current_target = None
+                self.current_stage += 1
+                stage_step = 0
+                stall = {"last_pos": None, "stall_count": 0}
+                continue
 
             if current_target is None:
                 grip_open = self.grip_open[self.current_stage]

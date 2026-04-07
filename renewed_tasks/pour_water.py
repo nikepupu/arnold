@@ -219,6 +219,9 @@ class PourWater(BaseTask):
             )
             position_rotation_interp_iter = iter(position_rotation_interp_list)
 
+        stage_step = 0
+        stall = {"last_pos": None, "stall_count": 0}
+
         while self.current_stage < self.end_stage:
             if self.time_step % 120 == 0:
                 self.logger.info(f"tick: {self.time_step}")
@@ -226,6 +229,15 @@ class PourWater(BaseTask):
             if self.time_step >= self.horizon:
                 self.is_success = -1
                 break
+
+            if self._check_stall(stall, stage_step):
+                print(f'[pour_water] stage {self.current_stage} stalled, advancing',
+                      flush=True)
+                current_target = None
+                self.current_stage += 1
+                stage_step = 0
+                stall = {"last_pos": None, "stall_count": 0}
+                continue
 
             if current_target is None:
                 grip_open = self.grip_open[self.current_stage]
@@ -290,6 +302,8 @@ class PourWater(BaseTask):
                 current_target = None
                 if self.current_stage < 4:
                     self.current_stage += 1
+                    stage_step = 0
+                    stall = {"last_pos": None, "stall_count": 0}
                     self.logger.info(f"enter stage {self.current_stage}")
 
             else:
@@ -303,6 +317,7 @@ class PourWater(BaseTask):
 
             simulation_context.step(render=render)
             self.time_step += 1
+            stage_step += 1
 
         for _ in range(self.success_check_period):
             simulation_context.step(render=False)

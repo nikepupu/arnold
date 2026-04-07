@@ -37,6 +37,8 @@ sys.argv += [
     "--/log/channels/isaacsim.core.simulation_manager.plugin=error",
     "--/log/channels/usdrt.population.plugin=error",
     "--/log/channels/omni.physx.plugin=error",
+    "--/log/channels/omni.usd.metrics.assembler.plugin=error",
+    "--/log/channels/omni.physx.tensors.plugin=error",
 ]
 # launch omniverse app
 app_launcher = AppLauncher(args_cli)
@@ -46,8 +48,6 @@ from isaaclab.sim import SimulationCfg, SimulationContext
 from isaaclab.sim.simulation_cfg import PhysxCfg
 
 import carb
-for _ch in ("isaacsim.core.utils.semantics", "usdrt.population.plugin", "omni.physx.plugin"):
-    carb.settings.get_settings().set(f"/log/channels/{_ch}", "error")
 
 logger = logging.getLogger(__name__)
 
@@ -210,8 +210,6 @@ def main():
         log_str = f'correct: {correct} | total: {total} | remaining: {len(data)} | success rate: {correct/total:.2%}'
         print(log_str, flush=True)
         stats[fname] = suc
-
-    simulation_app.close()
 
     
 
