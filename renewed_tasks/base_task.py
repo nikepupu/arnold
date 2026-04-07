@@ -14,6 +14,7 @@ import os
 from isaacsim.core.prims import XFormPrim
 from isaacsim.core.utils.prims import is_prim_path_valid, get_prim_at_path, delete_prim
 from isaacsim.robot.manipulators.examples.franka import Franka
+
 from renewed_utils.semantics import add_update_semantics
 
 from isaacsim.core.utils.stage import set_stage_units, set_stage_up_axis, is_stage_loading
@@ -516,12 +517,27 @@ class BaseTask(ABC):
         robot = Franka(
                 prim_path = prim_path, name = f"my_frankabot{index}",
                 # custom franka.usd is in cm scale; use default (meter-scale) Franka instead
-                # usd_path = self.robot_parameters[index].usd_path,
+                usd_path = "./robot/franka.usd",
                 orientation = rotation,
                 position = position / 100.0,
                 end_effector_prim_name = 'panda_rightfinger',
                 gripper_dof_names = ["panda_finger_joint1", "panda_finger_joint2"],
             )
+
+        # finger_material = PhysicsMaterial(
+        #     prim_path=f"/World_{index}/physics_material/franka_finger",
+        #     name="franka_finger_material",
+        #     static_friction=2.0,
+        #     dynamic_friction=1.5,
+        #     restitution=0.0,
+        # )
+
+        # for finger_prim_name in ["panda_leftfinger", "panda_rightfinger"]:
+        #     finger_geom = SingleGeometryPrim(
+        #         prim_path=f"{prim_path}/{finger_prim_name}",
+        #         name=f"{finger_prim_name}_geom",
+        #     )
+        #     finger_geom.apply_physics_material(finger_material)
 
         robot_prim = get_prim_at_path(prim_path)
         physx_art_api = PhysxSchema.PhysxArticulationAPI.Apply(robot_prim)

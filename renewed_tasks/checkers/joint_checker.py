@@ -28,6 +28,25 @@ class JointCheck():
         self.type = self.prim.GetTypeName()
         self.full_name = self.prim.GetPath().pathString
         self.joint = self.stage.GetPrimAtPath(self.full_name)
+        self.link = self.joint.GetRelationship("physics:body1").GetTargets()[0]
+
+
+        from isaacsim.core.api.materials import PhysicsMaterial
+        from isaacsim.core.prims import SingleGeometryPrim
+
+        link_material = PhysicsMaterial(
+            prim_path=f"/World_0/physics_material/link_material",
+            name="link_material",
+            static_friction=200,
+            dynamic_friction=150,
+            restitution=0.0,
+        )
+
+        link_geom = SingleGeometryPrim(
+            prim_path=f"{self.link}",
+            name=f"{self.link}_geom",
+        )
+        link_geom.apply_physics_material(link_material)
 
         # Determine the appropriate drive type name
         self.drive_type = None
@@ -35,6 +54,14 @@ class JointCheck():
             self.drive_type = "angular"
         elif self.prim.IsA(UsdPhysics.PrismaticJoint):
             self.drive_type = "linear"
+
+        drive_api = UsdPhysics.DriveAPI.Get(self.prim, self.drive_type)
+        stiffness = drive_api.GetStiffnessAttr().Get()
+        damping   = drive_api.GetDampingAttr().Get()
+        print("stiffness: ", stiffness, "damping: ", damping)
+
+        drive_api.GetStiffnessAttr().Set(0.0)
+        drive_api.GetDampingAttr().Set(0.0)    
 
         # Get joint state api
         if not self.prim.HasAPI(PhysxSchema.JointStateAPI, self.drive_type):

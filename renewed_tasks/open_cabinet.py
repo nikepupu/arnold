@@ -20,10 +20,12 @@ class OpenCabinet(BaseTask):
         super().__init__(num_stages, horizon, stage_properties, record)
         self.task = 'open_cabinet'
         self.grip_open = [True, False, False]
-        self.gripper_trigger_period = 50
+        self.gripper_trigger_period = 200
         self.success_check_period = 300
         self.logger = logging.getLogger(__name__)
         self.use_gpu_physics = False
+
+        self.time_out_steps = 2000
 
     def reset(self, robot_parameters, 
               scene_parameters, 
@@ -185,7 +187,7 @@ class OpenCabinet(BaseTask):
                     num_dofs = self.robot.num_dof
                     gripper_indices = [num_dofs - 2, num_dofs - 1]  # panda_finger_joint1, panda_finger_joint2
                     if current_target[2] < 0.5:
-                        gripper_positions = np.array([0.0, 0.0])  # close
+                        gripper_positions = np.array([0.00, 0.00])  # close
                     else:
                         gripper_positions = np.array([0.05, 0.05])  # open
                     target_joint_positions_gripper = ArticulationAction(
@@ -210,8 +212,16 @@ class OpenCabinet(BaseTask):
                 articulation_controller.apply_action(target_joint_positions)
                 self.try_record(actions=target_joint_positions)
 
+                
+                
+                if self.time_step >= self.time_out_steps:
+                    break
+
             simulation_context.step(render=render)
             self.time_step += 1
+
+            if self.time_step % 120 == 0:
+                print(f"tick: {self.time_step}", self.current_stage)
             
         if self.current_stage == self.num_stages:
             for _ in range(self.success_check_period):
