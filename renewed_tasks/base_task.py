@@ -122,15 +122,15 @@ class BaseTask(ABC):
             self.checker.reset()
             self.checker = None
 
-        if hasattr(self, "object_parameter") and self.object_parameter is not None:
-            self.object_parameter.object_timeline_management = None
-        if hasattr(self, "objects_parameters"):
-            for p in getattr(self, "objects_parameters", []):
-                if hasattr(p, "object_timeline_management"):
-                    p.object_timeline_management = None
+            if hasattr(self, "object_parameter") and self.object_parameter is not None:
+                self.object_parameter.object_timeline_management = None
+            if hasattr(self, "objects_parameters"):
+                for p in getattr(self, "objects_parameters", []):
+                    if hasattr(p, "object_timeline_management"):
+                        p.object_timeline_management = None
 
-        import gc
-        gc.collect()
+            import gc
+            gc.collect()
 
     def _recreate_simulation_view(self):
         """Invalidate the stale global SimulationView cached in

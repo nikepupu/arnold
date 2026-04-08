@@ -1,5 +1,4 @@
 import math
-import time as _time
 import numpy as np
 import omni
 import torch
@@ -150,7 +149,6 @@ class JointChecker(BaseChecker):
         self.previous_percentage = None
         self.vel = None
         self.check_freq = 1
-        self._last_print_time = 0.0
 
     def initialization_step(self):
         self.joint_checker = JointCheck(self.target_prim_path, self.target_joint)
@@ -193,9 +191,7 @@ class JointChecker(BaseChecker):
             if self.previous_percentage is not None:
                 self.vel  = abs(percentage - self.previous_percentage)
 
-            now = _time.monotonic()
-            if now - self._last_print_time >= 2.0:
-                self._last_print_time = now
+            if self.total_step % 120 == 0:
                 print("current: {:.1f}; target: {:.1f}; delta percentage: {:.1f}:".format(percentage, self.target_value*100, self.target_value*100 - percentage) )
             
             if abs(percentage/100 - self.target_value) < self.tolerance and self.vel is not None and self.vel < 0.05:

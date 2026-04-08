@@ -1,5 +1,4 @@
 import pxr
-import time as _time
 import omni
 import math
 import numpy as np
@@ -154,7 +153,6 @@ class WaterChecker(BaseChecker):
             raise Exception(f"Target prim must exist at path {self.target_prim_path}")
 
         self.check_freq = 1
-        self._last_print_time = 0.0
     
     def initialize(self):
         self.create_task_callback()
@@ -197,9 +195,7 @@ class WaterChecker(BaseChecker):
             else:
                 spill = 0
 
-            now = _time.monotonic()
-            if now - self._last_print_time >= 2.0:
-                self._last_print_time = now
+            if self.total_step % 120 == 0:
                 print(f'percentage: {percentage} target {self.target_volume}')
             
             if abs(percentage -  self.target_volume) < (self.tolerance) and abs(self.diff_to_upright()) < 30 and spill < 10:

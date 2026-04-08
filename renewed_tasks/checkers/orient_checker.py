@@ -1,5 +1,4 @@
 import math
-import time as _time
 import omni
 from isaacsim.core.prims import RigidPrim
 from .base_checker import BaseChecker
@@ -26,7 +25,6 @@ class OrientChecker(BaseChecker):
             raise Exception(f"Target prim must exist at path {self.target_prim_path}")
 
         self.check_freq = 1
-        self._last_print_time = 0.0
 
     def initialization_step(self):
         self.targetRigid = RigidPrim(prim_paths_expr=self.target_prim_path)
@@ -72,9 +70,7 @@ class OrientChecker(BaseChecker):
             if self.previous_pos is not None:
                 self.vel  = abs(pos - self.previous_pos)
             
-            now = _time.monotonic()
-            if now - self._last_print_time >= 2.0:
-                self._last_print_time = now
+            if self.total_step % 120 == 0:
                 print("delta_angle", delta_angle, "current_y_angle", self.get_prim_y_angle(), "target_y_angle", self.target_delta_y)
 
             if delta_angle < self.tolerance and self.vel is not None and self.vel < 0.1:
