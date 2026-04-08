@@ -141,6 +141,9 @@ class OpenCabinet(BaseTask):
             )
             position_rotation_interp_iter = iter(position_rotation_interp_list)
 
+        stage_step = 0
+        stall = {"last_pos": None, "stall_count": 0}
+
         while self.current_stage < self.end_stage:
             if self.time_step % 120 == 0:
                 self.logger.info(f"tick: {self.time_step}")
@@ -148,6 +151,15 @@ class OpenCabinet(BaseTask):
             if self.time_step >= self.horizon:
                 self.is_success = -1
                 break
+
+            if self.current_stage < 2 and self._check_stall(stall, stage_step):
+                print(f'[open_cabinet] stage {self.current_stage} stalled, advancing',
+                      flush=True)
+                current_target = None
+                self.current_stage += 1
+                stage_step = 0
+                stall = {"last_pos": None, "stall_count": 0}
+                continue
 
             if current_target is None:
                 grip_open = self.grip_open[self.current_stage]
@@ -201,6 +213,8 @@ class OpenCabinet(BaseTask):
                 current_target = None
                 if self.current_stage < 2:
                     self.current_stage += 1
+                    stage_step = 0
+                    stall = {"last_pos": None, "stall_count": 0}
                     self.logger.info(f"enter stage {self.current_stage}")
             
             else:
@@ -212,7 +226,9 @@ class OpenCabinet(BaseTask):
                 self.try_record(actions=target_joint_positions)
                 
             simulation_context.step(render=render)
-            
+            self.time_step += 1
+            stage_step += 1
+
         if self.current_stage == self.num_stages:
             for _ in range(self.success_check_period):
                 simulation_context.step(render=False)
