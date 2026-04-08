@@ -1,3 +1,4 @@
+import time as _time
 import omni
 import omni.usd
 from isaacsim.core.prims import RigidPrim
@@ -18,6 +19,7 @@ class PickupChecker(BaseChecker):
         self.previous_pos = None
         self.vel = None
         self.check_freq = 1
+        self._last_print_time = 0.0
 
         self.target_prim = self.stage.GetPrimAtPath(self.target_prim_path)
         if not self.target_prim:
@@ -70,7 +72,9 @@ class PickupChecker(BaseChecker):
             
             target_height = (self.target_delta_y + self.target_prim_init_y)
             need_delta_y = abs(target_prim_current_y - target_height)
-            if self.total_step % self.print_every == 0:
+            now = _time.monotonic()
+            if now - self._last_print_time >= 2.0:
+                self._last_print_time = now
                 print(self.total_step, self.target_prim_path, "target height %s current height %s" %(target_height, target_prim_current_y))
                 print("tolerance", self.tolerance, "vel", self.vel, "need_delta_y", need_delta_y)
 

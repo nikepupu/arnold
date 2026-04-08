@@ -62,9 +62,9 @@ class BaseChecker():
         """
         Reset event
         """
+        self.is_init = False
         self._physics_update_subscription = None
         self._timeline_subscription = None
-        # self._setup_callbacks()
     
     def _on_success_hold(self):
         pass

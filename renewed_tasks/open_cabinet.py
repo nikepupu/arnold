@@ -25,8 +25,6 @@ class OpenCabinet(BaseTask):
         self.logger = logging.getLogger(__name__)
         self.use_gpu_physics = False
 
-        self.time_out_steps = 2000
-
     def reset(self, robot_parameters, 
               scene_parameters, 
               object_parameters,
@@ -72,12 +70,13 @@ class OpenCabinet(BaseTask):
 
         positions = torch.tensor(np.array(param.object_position)/100.0).unsqueeze(0)
         rotations = torch.tensor(param.orientation_quat).unsqueeze(0)
-        scales = torch.tensor(np.array(param.scale)/100.0).unsqueeze(0)
+        object_scale = np.array(param.scale) / 100.0
 
-        XFormPrim(object_prim_path, positions=positions, orientations=rotations, scales=scales)
+        self._bake_object_scale(object_prim_path, object_scale)
+        XFormPrim(object_prim_path, positions=positions, orientations=rotations)
         self._wait_for_loading()
 
-        self._rescale_prismatic_joint_limits(object_prim_path, np.array(param.scale) / 100.0)
+        self._rescale_prismatic_joint_limits(object_prim_path, object_scale)
 
         if param.object_physics_properties:
             set_physics_properties(self.stage, object_prim, param.object_physics_properties)
@@ -211,17 +210,8 @@ class OpenCabinet(BaseTask):
                 articulation_controller = self.robot.get_articulation_controller()
                 articulation_controller.apply_action(target_joint_positions)
                 self.try_record(actions=target_joint_positions)
-
                 
-                
-                if self.time_step >= self.time_out_steps:
-                    break
-
             simulation_context.step(render=render)
-            self.time_step += 1
-
-            if self.time_step % 120 == 0:
-                print(f"tick: {self.time_step}", self.current_stage)
             
         if self.current_stage == self.num_stages:
             for _ in range(self.success_check_period):

@@ -117,15 +117,20 @@ class BaseTask(ABC):
     def _kill_checker(self):
         """Deactivate the checker and force-unsubscribe its physics/timeline
         callbacks so they don't interfere with scene reconfiguration."""
-        
-        # self.simulation_context.pause()
         if hasattr(self, "checker") and self.checker:
             self.checker.is_init = False
             self.checker.reset()
             self.checker = None
+
+        if hasattr(self, "object_parameter") and self.object_parameter is not None:
+            self.object_parameter.object_timeline_management = None
+        if hasattr(self, "objects_parameters"):
+            for p in getattr(self, "objects_parameters", []):
+                if hasattr(p, "object_timeline_management"):
+                    p.object_timeline_management = None
+
         import gc
         gc.collect()
-        # self.simulation_context.play()
 
     def _recreate_simulation_view(self):
         """Invalidate the stale global SimulationView cached in
@@ -374,6 +379,67 @@ class BaseTask(ABC):
                 prim.GetReferences().ClearReferences()
         self.objects_list = []
     
+    def _bake_object_scale(self, object_prim_path, scale):
+        """Bake XForm scale into mesh geometry, child translations, and joint
+        frames so that PhysX collision shapes stay aligned with visual meshes.
+
+        PhysX articulations don't properly propagate xformOp:scale to
+        collision shapes during simulation, causing visual/physics divergence.
+        After this call the prim's xformOp:scale is reset to (1, 1, 1).
+        """
+        from pxr import Usd, UsdGeom, UsdPhysics, Gf, Vt
+
+        scale = np.asarray(scale, dtype=np.float64).flatten()
+        if np.allclose(scale, 1.0, atol=1e-6):
+            return
+
+        sx, sy, sz = float(scale[0]), float(scale[1]), float(scale[2])
+        root = get_prim_at_path(object_prim_path)
+        if not root or not root.IsValid():
+            return
+
+        for prim in Usd.PrimRange(root):
+            # --- scale point-based geometry (Mesh, BasisCurves, Points) ---
+            if prim.IsA(UsdGeom.PointBased):
+                pts_attr = UsdGeom.PointBased(prim).GetPointsAttr()
+                pts = pts_attr.Get()
+                if pts is not None and len(pts) > 0:
+                    pts_attr.Set(Vt.Vec3fArray([
+                        Gf.Vec3f(p[0] * sx, p[1] * sy, p[2] * sz)
+                        for p in pts
+                    ]))
+
+                ext_attr = UsdGeom.Boundable(prim).GetExtentAttr()
+                ext = ext_attr.Get()
+                if ext is not None and len(ext) > 0:
+                    ext_attr.Set(Vt.Vec3fArray([
+                        Gf.Vec3f(e[0] * sx, e[1] * sy, e[2] * sz)
+                        for e in ext
+                    ]))
+
+            # --- scale translate xform ops on child prims ---
+            if prim.GetPath() != root.GetPath():
+                xformable = UsdGeom.Xformable(prim)
+                for op in xformable.GetOrderedXformOps():
+                    if op.GetOpType() == UsdGeom.XformOp.TypeTranslate:
+                        t = op.Get()
+                        if t is not None:
+                            op.Set(Gf.Vec3d(t[0] * sx, t[1] * sy, t[2] * sz))
+
+            # --- scale joint anchor positions ---
+            if prim.IsA(UsdPhysics.Joint):
+                joint = UsdPhysics.Joint(prim)
+                for pos_attr in (joint.GetLocalPos0Attr(), joint.GetLocalPos1Attr()):
+                    pos = pos_attr.Get()
+                    if pos is not None:
+                        pos_attr.Set(Gf.Vec3f(pos[0] * sx, pos[1] * sy, pos[2] * sz))
+
+        # reset root scale to identity
+        root_xformable = UsdGeom.Xformable(root)
+        for op in root_xformable.GetOrderedXformOps():
+            if op.GetOpType() == UsdGeom.XformOp.TypeScale:
+                op.Set(Gf.Vec3d(1.0, 1.0, 1.0))
+
     def _rescale_prismatic_joint_limits(self, object_prim_path, scale):
         """Scale prismatic joint limits to match the object's XFormPrim scale.
 

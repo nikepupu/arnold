@@ -71,12 +71,13 @@ class OpenDrawer(BaseTask):
 
         positions = torch.tensor(np.array(param.object_position)/100.0).unsqueeze(0)
         rotations = torch.tensor(param.orientation_quat).unsqueeze(0)
-        scales = torch.tensor(np.array(param.scale)/100.0).unsqueeze(0)
+        object_scale = np.array(param.scale) / 100.0
 
-        XFormPrim(object_prim_path, positions=positions, orientations=rotations, scales=scales)
+        self._bake_object_scale(object_prim_path, object_scale)
+        XFormPrim(object_prim_path, positions=positions, orientations=rotations)
         self._wait_for_loading()
 
-        self._rescale_prismatic_joint_limits(object_prim_path, np.array(param.scale) / 100.0)
+        self._rescale_prismatic_joint_limits(object_prim_path, object_scale)
 
         if param.object_physics_properties:
             set_physics_properties(self.stage, object_prim, param.object_physics_properties)
