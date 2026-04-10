@@ -68,12 +68,15 @@ python renewed_eval.py --task=close_cabinet --mode=eval --use_gt 1 1 --visualize
 python renewed_eval.py --task=transfer_water --mode=eval --use_gt 1 1 --visualize
 ```
 
+## 3. Eval
+```sh
+python renewed_ckpt_selection.py --task=pickup_object --model=peract --lang_encoder=clip --mode=eval --visualiz
+e=0
+```
+
 ```python
-import isaaclab.sim as sim_utils
-simulation_context = sim_utils.SimulationContext.instance()
-for _ in range(200):
-    print("step", _)  
-    simulation_context.step(render=True)
+import isaaclab.sim as sim_utils; simulation_context = sim_utils.SimulationContext.instance()
+for _ in range(500): print("step", _); simulation_context.step(render=True)
 ```
 
 

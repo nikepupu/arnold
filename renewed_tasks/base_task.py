@@ -583,7 +583,8 @@ class BaseTask(ABC):
         robot = Franka(
                 prim_path = prim_path, name = f"my_frankabot{index}",
                 # custom franka.usd is in cm scale; use default (meter-scale) Franka instead
-                usd_path = "./robot/franka.usd",
+                usd_path = "./robot/renewed_franka.usd",
+                # usd_path = "./asset/sample/robot/franka/franka2.usd",
                 orientation = rotation,
                 position = position / 100.0,
                 end_effector_prim_name = 'panda_rightfinger',
@@ -634,14 +635,14 @@ class BaseTask(ABC):
                     _hi_attr.Set(_old_hi + _EXT_DEG)
                     _jlim_info[_cp.GetName()] = {"old": [round(_old_lo,2), round(_old_hi,2)],
                                                   "new": [round(_old_lo - _EXT_DEG,2), round(_old_hi + _EXT_DEG,2)]}
-        with open('/home/rgong/Desktop/arnold/.cursor/debug-5787ac.log', 'a') as _f:
-            _f.write(_json.dumps({"sessionId":"5787ac","location":"base_task.py:_load_robot","message":"joint_limits_extended",
-                                  "data":_jlim_info,"timestamp":int(_time.time()*1000),"hypothesisId":"AJ"}) + '\n')
+        # with open('/home/rgong/Desktop/arnold/.cursor/debug-5787ac.log', 'a') as _f:
+        #     _f.write(_json.dumps({"sessionId":"5787ac","location":"base_task.py:_load_robot","message":"joint_limits_extended",
+        #                           "data":_jlim_info,"timestamp":int(_time.time()*1000),"hypothesisId":"AJ"}) + '\n')
         # #endregion
 
         add_update_semantics(robot_prim, "Robot")
         self._wait_for_loading()
-        # self._set_sensors()
+        self._set_sensors()
      
         return robot
 
