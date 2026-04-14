@@ -25,7 +25,7 @@ parser.add_argument('--task', type=str, default='pickup_object', help='Task to e
 parser.add_argument('--model', type=str, default='peract', help='Model to use')
 parser.add_argument('--lang_encoder', type=str, default='clip', help='Language encoder to use')
 parser.add_argument('--mode', type=str, default='eval', help='Mode to use')
-parser.add_argument('--visualize', type=int, default=0, help='Visualize the evaluation')
+parser.add_argument("--visualize", action="store_true", default=False, help="Visualize the simulation.")
 parser.add_argument("--cfg_path", type=str, default="./configs/default.yaml", help="Path to the config file.")
 parser.add_argument("--checkpoint_dir", type=str, default="./data/model", help="Path to the checkpoint directory.")
 parser.add_argument("--exp_dir", type=str, default="./output", help="Path to the experiment directory.")
@@ -211,12 +211,14 @@ def main():
                         else:
                             act_pos, act_rot = get_action(
                                 gt=obs, agent=agent, franka=env.robot, c_controller=env.c_controller, npz_file=anno, offset=offset, timestep=i,
-                                device=agent_device, agent_type=cfg.model, obs_type=cfg.obs_type, lang_embed_cache=lang_embed_cache
+                                device=agent_device, agent_type=args_cli.model, obs_type=cfg.obs_type, lang_embed_cache=lang_embed_cache
                             )
 
                             logger.info(
                                 f"Prediction action {i}: trans={act_pos}, orient(euler XYZ)={R.from_quat(act_rot[[1,2,3,0]]).as_euler('XYZ', degrees=True)}"
                             )
+
+                            import ipdb; ipdb.set_trace()
 
                             obs, suc = env.step(act_pos=act_pos, act_rot=act_rot, render=render, use_gt=False)
 

@@ -156,7 +156,7 @@ def create_pcd_hardcode(camera, depth, cm_to_m=True):
 
     points_cam = compute_points(height, width, depth, fx, fy, cx, cy)
     
-    T = camera['pose'].T
+    T = camera['pose'].T.numpy()
     Rotation = T[:3, :3]
     t = T[:3, 3]
     points_world = points_cam @ np.transpose(Rotation) + t

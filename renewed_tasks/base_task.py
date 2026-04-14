@@ -363,8 +363,8 @@ class BaseTask(ABC):
         for i, gt in enumerate(gts):
             output = {'camera': self.camera_configs[i]}
             output['camera']['pose'] = self.cameras[i]._backend_utils.inverse(self.cameras[i].get_view_matrix_ros())
-            if 'rgba' in gt:
-                output['rgb'] = gt['rgba'].copy()
+            if 'rgb' in gt:
+                output['rgb'] = gt['rgb'].copy()
             if 'distance_to_image_plane' in gt:
                 output['depthLinear'] = gt['distance_to_image_plane'].copy() if gt['distance_to_image_plane'] is not None else None
             if 'semantic_segmentation' in gt:

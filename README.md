@@ -70,7 +70,7 @@ python renewed_eval.py --task=transfer_water --mode=eval --use_gt 1 1 --visualiz
 
 ## 3. Eval
 ```sh
-python renewed_ckpt_selection.py --task=pickup_object --model=peract --lang_encoder=clip --mode=eval --visualiz
+python renewed_ckpt_selection.py --task=pickup_object --model=peract --lang_encoder=clip --mode=eval --visualize
 e=0
 ```
 

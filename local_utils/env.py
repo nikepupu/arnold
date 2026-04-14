@@ -92,7 +92,7 @@ class Observation(object):
 
 
 def get_ee(cspace_controller):
-    from omni.isaac.core.utils.numpy.rotations import rot_matrices_to_quats
+    from isaacsim.core.utils.numpy.rotations import rot_matrices_to_quats
     ee_pos, ee_rot = cspace_controller.get_motion_policy().get_end_effector_pose(
         cspace_controller.get_articulation_motion_policy().get_active_joints_subset().get_joint_positions()
     )
@@ -100,12 +100,12 @@ def get_ee(cspace_controller):
     return (ee_pos, ee_rot)
 
 
-def get_obs(franka, cspace_controller, gt, type='rgb'):
+def get_obs(franka, cspace_controller, gt, camera_type='rgb'):
     obs = {}
 
     robot_base = franka.get_world_pose()
-    robot_base_pos = robot_base[0].copy()
-    robot_forward_direction = R.from_quat(robot_base[1][[1,2,3,0]]).as_matrix()[:, 0]
+    robot_base_pos = robot_base[0].numpy().copy()
+    robot_forward_direction = R.from_quat(robot_base[1].numpy()[[1,2,3,0]]).as_matrix()[:, 0]
     robot_forward_direction[1] = 0   # height
     robot_forward_direction = robot_forward_direction / np.linalg.norm(robot_forward_direction) * 50   # cm
     bound_center = robot_base_pos + robot_forward_direction
@@ -116,12 +116,12 @@ def get_obs(franka, cspace_controller, gt, type='rgb'):
     quat = position_rotation_world[1][[1,2,3,0]]   # wxyz to xyzw
     gripper_pose = [*gripper_pose_trans, *quat.tolist()]
 
-    gripper_joint_positions = franka.gripper.get_joint_positions()
+    gripper_joint_positions = franka.get_joint_positions()[-2:]
 
     for camera_idx in [0,1,2,3,4]:
-        if type == 'rgb':
+        if camera_type == 'rgb':
             rgb = gt['images'][camera_idx]['rgb'][:,:,:3]
-        elif type == 'mask':
+        elif camera_type == 'mask':
             rgb = gt['images'][camera_idx]['semanticSegmentation'][:,:,np.newaxis].repeat(3,-1) * 50
         else:
             raise ValueError('observation type should be either rgb or mask')
@@ -133,7 +133,7 @@ def get_obs(franka, cspace_controller, gt, type='rgb'):
         obs[CAMERAS[camera_idx]+'_depth'] = depth
         obs[CAMERAS[camera_idx]+'_point_cloud'] = point_cloud - bound_center / 100
     
-    gripper_open = (gripper_joint_positions[0] + gripper_joint_positions[1] > 7)
+    gripper_open = (gripper_joint_positions[0] + gripper_joint_positions[1] > 0.07)
 
     ob = Observation(
         left_rgb=obs['left_rgb'], 
@@ -189,41 +189,12 @@ def rotation_reached(c_controller, target):
 
 @torch.no_grad()
 def get_action(gt, agent, franka, c_controller, npz_file, offset, timestep, device, agent_type, obs_type='rgb', lang_embed_cache=None):
-    obs = get_obs(franka, c_controller, gt, type=obs_type)
+    obs = get_obs(franka, c_controller, gt, camera_type=obs_type)
     bound_center = obs.bound_center
 
     instruction = npz_file['gt'][0]['instruction']
 
-    if agent_type == 'cliport6d':
-        bounds = offset / 100
-
-        # y-up to z-up
-        bounds = bounds[[0, 2, 1]]
-        obs.front_point_cloud = obs.front_point_cloud[:, :, [0, 2, 1]]
-        obs.base_point_cloud = obs.base_point_cloud[:, :, [0, 2, 1]]
-        obs.left_point_cloud = obs.left_point_cloud[:, :, [0, 2, 1]]
-        obs.wrist_bottom_point_cloud = obs.wrist_bottom_point_cloud[:, :, [0, 2, 1]]
-        obs.wrist_point_cloud = obs.wrist_point_cloud[:, :, [0, 2, 1]]
-
-        inp_img, lang_goal, p0, output_dict = agent.act(obs, [instruction], bounds=bounds, pixel_size=5.625e-3)
-        
-        trans = np.ones(3) * 100
-        # m to cm
-        trans[[0,2]] *= output_dict['place_xy']
-        trans[1] *= output_dict['place_z']
-        trans += bound_center
-
-        rotation = np.array([output_dict['place_theta'], output_dict['pitch'], output_dict['roll']])
-        rotation = R.from_euler('zyx', rotation, degrees=False).as_matrix()
-        rot_transition = np.array([[1, 0, 0], [0, 0, 1], [0, -1, 0]]).astype(float)
-        rotation = R.from_matrix(rot_transition @ rotation).as_quat()
-
-        # print(
-        #     f'Model output: xy={output_dict["place_xy"]}, z={output_dict["place_z"]}, '
-        #         f'theta={output_dict["place_theta"]/np.pi*180}, pitch={output_dict["pitch"]/np.pi*180}, roll={output_dict["roll"]/np.pi*180}'
-        # )
-    
-    elif agent_type == 'peract':
+    if agent_type == 'peract':
         input_dict = {}
 
         obs_dict = get_obs_batch_dict(obs)
