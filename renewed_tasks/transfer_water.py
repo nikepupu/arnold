@@ -58,9 +58,9 @@ class TransferWater(PourWater):
 
             positions = torch.tensor(np.array(param.object_position) / 100.0).unsqueeze(0)
             rotations = torch.tensor(param.orientation_quat).unsqueeze(0)
+            scales = torch.tensor(np.array(param.scale) / 100.0).unsqueeze(0)
 
-            self._bake_object_scale(object_prim_path, np.array(param.scale) / 100.0)
-            XFormPrim(object_prim_path, positions=positions, orientations=rotations)
+            XFormPrim(object_prim_path, positions=positions, orientations=rotations, scales=scales)
             self._wait_for_loading()
 
             if param.fluid_properties:

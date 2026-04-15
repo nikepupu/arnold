@@ -104,9 +104,9 @@ class PourWater(BaseTask):
 
         positions = torch.tensor(np.array(param.object_position) / 100.0).unsqueeze(0)
         rotations = torch.tensor(param.orientation_quat).unsqueeze(0)
+        scales = torch.tensor(np.array(param.scale) / 100.0).unsqueeze(0)
 
-        self._bake_object_scale(object_prim_path, np.array(param.scale) / 100.0)
-        XFormPrim(object_prim_path, positions=positions, orientations=rotations)
+        XFormPrim(object_prim_path, positions=positions, orientations=rotations, scales=scales)
         self._wait_for_loading()
 
         mug_pos = np.array(param.object_position) / 100.0
@@ -221,6 +221,7 @@ class PourWater(BaseTask):
 
         stage_step = 0
         stall = {"last_pos": None, "stall_count": 0}
+        position_rotation_interp_iter_back = iter([])
 
         while self.current_stage < self.end_stage:
             if self.time_step % 120 == 0:
@@ -320,7 +321,7 @@ class PourWater(BaseTask):
             stage_step += 1
 
         for _ in range(self.success_check_period):
-            simulation_context.step(render=False)
+            simulation_context.step(render=True)
             if self.checker.success:
                 self.is_success = 1
                 break
